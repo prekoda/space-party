@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Space Party</title>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+    <div id="start-screen" class="screen">
+        <h1>Space Party</h1>
+        <div class="form-group">
+            <input type="text" id="playerName" placeholder="Enter Your Name" maxlength="15">
+        </div>
+        <div class="form-group">
+            <label>Select Ship Color:</label>
+            <div class="color-picker">
+                <div class="color-option" data-color="#ff3366" style="background: #ff3366;"></div>
+                <div class="color-option" data-color="#00ffcc" style="background: #00ffcc;"></div>
+                <div class="color-option" data-color="#33ccff" style="background: #33ccff;"></div>
+                <div class="color-option" data-color="#cc33ff" style="background: #cc33ff;"></div>
+            </div>
+        </div>
+        <div class="form-group">
+            <input type="text" id="roomCode" placeholder="Room Code (Leave empty to create)">
+        </div>
+        <button id="joinBtn">JOIN BATTLE</button>
+    </div>
+
+    <div id="game-screen" class="screen hidden">
+        <div id="game-scale-wrap">
+            <canvas id="gameCanvas" width="1600" height="1000"></canvas>
+
+            <!-- Floating HUD overlaid on canvas -->
+            <div id="ui-layer">
+                <div id="room-display">Room: <span id="currentRoomCode">---</span></div>
+                <div id="timerDisplay"
+                    style="position: absolute; top: 20px; left: 50%; transform: translateX(-50%); font-size: 2rem; color: #fff; text-shadow: 0 0 10px #00ffcc;">
+                    05:00</div>
+                <div id="leaderboard">
+                    <h3>Leaderboard</h3>
+                    <ul id="scoreList"></ul>
+                </div>
+            </div>
+
+            <!-- Player HUD: HP + Dash, sits below the canvas -->
+            <div id="player-hud">
+                <!-- Shield / HP -->
+                <div class="hud-block">
+                    <div class="hud-label">SHIELD</div>
+                    <div id="hud-hearts">
+                        <div class="heart active" id="heart-0"></div>
+                        <div class="heart active" id="heart-1"></div>
+                        <div class="heart active" id="heart-2"></div>
+                    </div>
+                </div>
+
+                <div class="hud-sep"></div>
+
+                <!-- Dash Cooldown -->
+                <div class="hud-block">
+                    <div class="hud-label">DASH &nbsp;<span id="dash-status" class="dash-ready">READY</span></div>
+                    <div id="dash-bar-wrap">
+                        <div id="dash-bar"></div>
+                    </div>
+                </div>
+
+                <div class="hud-sep"></div>
+
+                <!-- Active Powerup -->
+                <div class="hud-block" id="hud-powerup-section">
+                    <div class="hud-label">WEAPON</div>
+                    <div id="active-weapon"
+                        style="font-size:1.1rem; color:#fff; font-weight:bold; letter-spacing:1px; text-shadow:0 0 8px #fff;">
+                        NORMAL
+                    </div>
+                    <div id="weapon-ammo" style="font-size:0.7rem; color:rgba(255,255,255,0.5);">
+                        &#8734;
+                    </div>
+                </div>
+
+                <div class="hud-sep"></div>
+
+                <!-- Controls hint -->
+                <div class="hud-block hud-controls">
+                    <span>🖱️ <b>LMB</b> Shoot</span>
+                    <span>🖱️ <b>RMB</b> Rotate</span>
+                    <span>🖱️ <b>2×RMB</b> Dash</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="client.js"></script>
+</body>
+
+</html>
