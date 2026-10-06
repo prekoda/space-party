@@ -1,51 +1,35 @@
-# Deploying Astro Party
+# Running & Deploying Space Party
 
-## Deploying on Vercel
-Vercel is fantastic for static sites and serverless functions, but **it is not recommended for real-time WebSocket applications like Astro Party**. 
+## Run locally
+```bash
+npm install
+npm start            # http://localhost:3001  (set PORT to change)
+```
+Friends on the same Wi-Fi can open `http://<your-PC-IP>:3001` on their phones and play in the browser.
+Installing as an app needs HTTPS, so that works once deployed (below) — or on `localhost`.
 
-Vercel uses "Serverless Functions" which spin up and down per request. They do not maintain a continuous connection or a shared in-memory state (like our `rooms` object) which Socket.IO requires. 
+## How it's built
+- `public/js/sim.js` — the whole game simulation. The server runs it for online rooms; the browser runs the
+  same file for Local Party (and to predict your own ship online), so both modes behave identically.
+- `server.js` — Express + Socket.IO. 60 Hz authoritative rooms, snapshots at 30 Hz, 30 s reconnect grace.
+- `public/sw.js` + `manifest.webmanifest` — installable PWA. Local Party works fully offline once installed.
+- Regenerate icons with `npm run icons`.
 
-Therefore, you **must** deploy your Node.js backend (and frontend) on a platform that supports persistent Node.js servers and WebSockets (like Render, Railway, or Fly.io).
+## Deploy (needs a host with persistent WebSockets)
+Vercel/Netlify serverless functions can't hold Socket.IO rooms in memory — use Render, Railway or Fly.io.
 
----
+### Render (free tier)
+1. Push to GitHub.
+2. Render → **New + → Web Service** → pick the repo.
+3. Build: `npm install` · Start: `npm start` · Instance: Free.
+4. You get `https://spaceparty-xxxx.onrender.com` — HTTPS, so phones can **Install App**
+   (Android: install button / browser menu; iPhone: Share → Add to Home Screen).
 
-## Deploying on Render (Recommended)
-Render is an easy and free (with sleeping) persistent server provider that works perfectly for Socket.IO.
+Free Render instances sleep when idle; the first visit after a while takes ~30 s to wake.
 
-### Prerequisites
-1. Push your code to a GitHub repository.
-2. Ensure you have `node main.js` or `node server.js` set in your `package.json` under the `start` script:
-   ```json
-   "scripts": {
-     "start": "node server.js"
-   }
-   ```
+### Railway
+New Project → Deploy from GitHub repo → it detects Node and runs `npm start`. Then **Settings → Generate Domain**.
 
-### Deployment Steps
-1. Sign up / Log in to [Render](https://render.com/).
-2. Click **New +** and select **Web Service**.
-3. Connect your GitHub account and select your `spaceparty` repository.
-4. Render will auto-detect "Node". 
-   - Build Command: `npm install`
-   - Start Command: `npm start`
-5. Select the **Free** tier.
-6. Click **Create Web Service**.
-7. Render will build and deploy your app. It will give you a URL like `https://spaceparty-xyz.onrender.com`.
-
----
-
-## Deploying on Railway (Alternative)
-Railway is another excellent option with a generous trial/hobby tier.
-
-### Deployment Steps
-1. Make sure your `package.json` has the start script (as mentioned above).
-2. Go to [Railway.app](https://railway.app/).
-3. Click **New Project** -> **Deploy from GitHub repo**.
-4. Select your `spaceparty` repo.
-5. Railway will automatically detect the Node.js environment, install express/socket.io, and start your server using the scripts defined in your `package.json`.
-6. Go to the project settings and click **Generate Domain** so the world can access it.
-
----
-
-## Modifying Code for Production (Optional)
-Currently, `client.js` uses `const socket = io();` which automatically connects back to the host serving the file. This means there is **zero code change required**! It works locally (`localhost:3001`) and will work seamlessly on your deployed Render/Railway URL.
+## Shipping updates to installed apps
+Bump `CACHE` in `public/sw.js` (e.g. `spaceparty-v3`) when you deploy. Installed apps fetch fresh files
+network-first anyway, so players get updates on next launch; the bump just clears old cached files.

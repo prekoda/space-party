@@ -2,100 +2,185 @@
 <html lang="en">
 
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Space Party</title>
-    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="style.css">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+  <meta name="theme-color" content="#05060f">
+  <meta name="description" content="Fast one-button space battles for up to 6 players. Play online with friends or on one device.">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Space Party">
+  <title>Space Party</title>
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="icon" type="image/png" href="/icons/icon-192.png">
+  <link rel="apple-touch-icon" href="/icons/icon-180.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Russo+One&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/style.css">
 </head>
 
 <body>
-    <div id="start-screen" class="screen">
-        <h1>Space Party</h1>
-        <div class="form-group">
-            <input type="text" id="playerName" placeholder="Enter Your Name" maxlength="15">
-        </div>
-        <div class="form-group">
-            <label>Select Ship Color:</label>
-            <div class="color-picker">
-                <div class="color-option" data-color="#ff3366" style="background: #ff3366;"></div>
-                <div class="color-option" data-color="#00ffcc" style="background: #00ffcc;"></div>
-                <div class="color-option" data-color="#33ccff" style="background: #33ccff;"></div>
-                <div class="color-option" data-color="#cc33ff" style="background: #cc33ff;"></div>
-            </div>
-        </div>
-        <div class="form-group">
-            <input type="text" id="roomCode" placeholder="Room Code (Leave empty to create)">
-        </div>
-        <button id="joinBtn">JOIN BATTLE</button>
+  <canvas id="cv"></canvas>
+  <div id="dim"></div>
+  <div id="touch"></div>
+
+  <div id="hud" hidden>
+    <div id="hud-left"><span id="hud-room"></span><span id="hud-ping"></span></div>
+    <div id="scorebar"></div>
+    <div id="hud-right">
+      <button id="btn-hud-mute" class="icon-btn" aria-label="Toggle sound">🔊</button>
+      <button id="btn-pause" class="icon-btn" aria-label="Pause">❚❚</button>
     </div>
+  </div>
+  <div id="spectate" hidden>Spectating — you'll join next round</div>
 
-    <div id="game-screen" class="screen hidden">
-        <div id="game-scale-wrap">
-            <canvas id="gameCanvas" width="1600" height="1000"></canvas>
+  <main id="menus">
+    <!-- Home -->
+    <section id="scr-home" class="screen">
+      <h1 class="logo">SPACE<span>PARTY</span></h1>
+      <p class="tag">One button to turn. One to shoot. Last pilot flying wins.</p>
+      <input id="in-name" maxlength="14" placeholder="Your pilot name" autocomplete="off" spellcheck="false">
+      <div class="stack">
+        <button class="btn primary" data-go="online">Play Online</button>
+        <button class="btn" data-go="local">Local Party</button>
+        <button class="btn ghost" data-go="help">How to Play</button>
+      </div>
+      <div class="row">
+        <button id="btn-install" class="btn ghost small" hidden>⬇ Install App</button>
+        <button id="btn-mute" class="btn ghost small">Sound: on</button>
+      </div>
+      <p id="ios-hint" class="hint" hidden>To install on iPhone: tap <b>Share</b> → <b>Add to Home Screen</b></p>
+    </section>
 
-            <!-- Floating HUD overlaid on canvas -->
-            <div id="ui-layer">
-                <div id="room-display">Room: <span id="currentRoomCode">---</span></div>
-                <div id="timerDisplay"
-                    style="position: absolute; top: 20px; left: 50%; transform: translateX(-50%); font-size: 2rem; color: #fff; text-shadow: 0 0 10px #00ffcc;">
-                    05:00</div>
-                <div id="leaderboard">
-                    <h3>Leaderboard</h3>
-                    <ul id="scoreList"></ul>
-                </div>
-            </div>
+    <!-- Online -->
+    <section id="scr-online" class="screen" hidden>
+      <h2>Play Online</h2>
+      <button id="btn-create" class="btn primary">Create Room</button>
+      <div class="or">or join a friend's room</div>
+      <div class="row join">
+        <input id="in-code" maxlength="4" placeholder="CODE" autocomplete="off" autocapitalize="characters" spellcheck="false">
+        <button id="btn-join" class="btn">Join</button>
+      </div>
+      <p id="online-err" class="err"></p>
+      <button class="btn ghost" data-go="home">Back</button>
+    </section>
 
-            <!-- Player HUD: HP + Dash, sits below the canvas -->
-            <div id="player-hud">
-                <!-- Shield / HP -->
-                <div class="hud-block">
-                    <div class="hud-label">SHIELD</div>
-                    <div id="hud-hearts">
-                        <div class="heart active" id="heart-0"></div>
-                        <div class="heart active" id="heart-1"></div>
-                        <div class="heart active" id="heart-2"></div>
-                    </div>
-                </div>
-
-                <div class="hud-sep"></div>
-
-                <!-- Dash Cooldown -->
-                <div class="hud-block">
-                    <div class="hud-label">DASH &nbsp;<span id="dash-status" class="dash-ready">READY</span></div>
-                    <div id="dash-bar-wrap">
-                        <div id="dash-bar"></div>
-                    </div>
-                </div>
-
-                <div class="hud-sep"></div>
-
-                <!-- Active Powerup -->
-                <div class="hud-block" id="hud-powerup-section">
-                    <div class="hud-label">WEAPON</div>
-                    <div id="active-weapon"
-                        style="font-size:1.1rem; color:#fff; font-weight:bold; letter-spacing:1px; text-shadow:0 0 8px #fff;">
-                        NORMAL
-                    </div>
-                    <div id="weapon-ammo" style="font-size:0.7rem; color:rgba(255,255,255,0.5);">
-                        &#8734;
-                    </div>
-                </div>
-
-                <div class="hud-sep"></div>
-
-                <!-- Controls hint -->
-                <div class="hud-block hud-controls">
-                    <span>🖱️ <b>LMB</b> Shoot</span>
-                    <span>🖱️ <b>RMB</b> Rotate</span>
-                    <span>🖱️ <b>2×RMB</b> Dash</span>
-                </div>
-            </div>
+    <!-- Online lobby -->
+    <section id="scr-lobby" class="screen wide" hidden>
+      <div class="lobby-head">
+        <div>
+          <div class="label">Room code</div>
+          <div id="lobby-code" class="code">----</div>
         </div>
-    </div>
+        <button id="btn-share" class="btn small">Invite</button>
+      </div>
+      <ul id="lobby-players" class="players"></ul>
+      <div id="lobby-host">
+        <div class="label">Map</div>
+        <div id="lobby-maps" class="chips maps"></div>
+        <div class="split">
+          <div>
+            <div class="label">First to</div>
+            <div id="lobby-target" class="chips"></div>
+          </div>
+          <div>
+            <div class="label">Add bot</div>
+            <div class="chips">
+              <button class="chip" data-bot="easy">Easy</button>
+              <button class="chip" data-bot="normal">Normal</button>
+              <button class="chip" data-bot="hard">Hard</button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <p id="lobby-wait" class="hint"></p>
+      <div class="row">
+        <button id="btn-leave" class="btn ghost">Leave</button>
+        <button id="btn-start" class="btn primary">Start Match</button>
+      </div>
+    </section>
 
-    <script src="/socket.io/socket.io.js"></script>
-    <script src="client.js"></script>
+    <!-- Local party -->
+    <section id="scr-local" class="screen wide" hidden>
+      <h2>Local Party</h2>
+      <p class="hint">Everyone on one screen — share a keyboard or a tablet. Up to 6 players.</p>
+      <ul id="local-players" class="players"></ul>
+      <div class="row">
+        <button id="btn-add-human" class="btn small">+ Player</button>
+        <button id="btn-add-bot" class="btn small">+ Bot</button>
+      </div>
+      <div class="label">Map</div>
+      <div id="local-maps" class="chips maps"></div>
+      <div class="split">
+        <div>
+          <div class="label">First to</div>
+          <div id="local-target" class="chips"></div>
+        </div>
+        <label class="toggle"><input type="checkbox" id="chk-touch"><span>On-screen touch buttons</span></label>
+      </div>
+      <div class="row">
+        <button class="btn ghost" data-go="home">Back</button>
+        <button id="btn-local-start" class="btn primary">Start</button>
+      </div>
+    </section>
+
+    <!-- How to play -->
+    <section id="scr-help" class="screen wide" hidden>
+      <h2>How to Play</h2>
+      <div class="help-grid">
+        <div class="help-card">
+          <h3>Controls</h3>
+          <p>Your ship always flies forward.</p>
+          <p><kbd>→</kbd> hold to rotate</p>
+          <p><kbd>↓</kbd> tap to shoot</p>
+          <p><kbd>→</kbd><kbd>→</kbd> double-tap to <b>dash</b></p>
+          <p class="dim">Touch: left side rotates, right side fires.</p>
+        </div>
+        <div class="help-card">
+          <h3>Rules</h3>
+          <p>3 shots that reload. Get hit and your ship explodes — you <b>eject as a pilot</b>.</p>
+          <p>Pilots can't shoot, but survive 6s and you get a new ship.</p>
+          <p>Shoot or <b>ram</b> a pilot to eliminate them: <b>+1 point</b>. Last one alive: <b>+1</b>.</p>
+          <p>Self-kills cost a point. First to the target wins.</p>
+        </div>
+      </div>
+      <h3>Powerups <span class="dim">— shoot or ram the <b class="gold">?</b> crates</span></h3>
+      <div class="powers">
+        <div><canvas data-icon="laser" width="44" height="44"></canvas><b>Laser</b><span>Charge, then a beam that cuts through everything. Keep turning to sweep it.</span></div>
+        <div><canvas data-icon="triple" width="44" height="44"></canvas><b>Triple</b><span>Next 3 shots fire a spread of 3.</span></div>
+        <div><canvas data-icon="bounce" width="44" height="44"></canvas><b>Ricochet</b><span>3 shots that bounce off walls. Watch yourself.</span></div>
+        <div><canvas data-icon="homing" width="44" height="44"></canvas><b>Homing</b><span>2 missiles that hunt the nearest enemy and explode.</span></div>
+        <div><canvas data-icon="mine" width="44" height="44"></canvas><b>Mines</b><span>Drop 2 proximity mines behind you. They hit anyone.</span></div>
+        <div><canvas data-icon="freeze" width="44" height="44"></canvas><b>Freeze</b><span>Freezes a ship solid. Any hit then shatters it outright.</span></div>
+        <div><canvas data-icon="shield" width="44" height="44"></canvas><b>Shield</b><span>Absorbs one hit of anything.</span></div>
+        <div><canvas data-icon="joust" width="44" height="44"></canvas><b>Jouster</b><span>Side blades for 12s: slice ships, block bullets, extra speed.</span></div>
+      </div>
+      <button class="btn ghost" data-go="home">Back</button>
+    </section>
+
+    <!-- Pause -->
+    <section id="scr-pause" class="screen" hidden>
+      <h2>Paused</h2>
+      <p id="pause-note" class="hint"></p>
+      <div class="stack">
+        <button id="btn-resume" class="btn primary">Resume</button>
+        <button id="btn-end" class="btn">End match</button>
+        <button id="btn-quit" class="btn ghost">Quit to menu</button>
+      </div>
+    </section>
+  </main>
+
+  <div id="rotate-hint"><div>↻</div>Turn your phone sideways</div>
+  <div id="toast"></div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="/js/sim.js"></script>
+  <script src="/js/audio.js"></script>
+  <script src="/js/input.js"></script>
+  <script src="/js/render.js"></script>
+  <script src="/js/net.js"></script>
+  <script src="/js/main.js"></script>
 </body>
 
 </html>
