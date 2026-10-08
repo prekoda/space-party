@@ -251,11 +251,11 @@ select { font: inherit; font-family: var(--font); font-size: 10px; color: var(--
 .touch.local .corner.c2 { right: 0; bottom: 0; transform: rotate(-90deg); }
 .touch.local .corner.c3 { left: 0; top: 0; transform: rotate(90deg); }
 .touch.local .tri { position: absolute; inset: 0; pointer-events: auto; touch-action: none; background: color-mix(in srgb, var(--c) 22%, transparent); }
-/* the corner's big right triangle is split from the corner to the middle of its long edge */
-.touch.local .tri.rot { clip-path: polygon(0 100%, 0 0, 50% 50%); }
-.touch.local .tri.fire { clip-path: polygon(0 100%, 100% 100%, 50% 50%); background: color-mix(in srgb, var(--c) 34%, transparent); }
+/* the corner triangle is split corner-to-hypotenuse: fire on the player.s left, rotate on their right */
+.touch.local .tri.fire { clip-path: polygon(0 100%, 0 0, 50% 50%); }
+.touch.local .tri.rot { clip-path: polygon(0 100%, 100% 100%, 50% 50%); background: color-mix(in srgb, var(--c) 34%, transparent); }
 .touch.local .tri.down { background: color-mix(in srgb, var(--c) 60%, transparent); }
 .touch.local .tri span { position: absolute; color: #fff; opacity: .85; filter: drop-shadow(2px 2px 0 #000); }
-.touch.local .tri.rot span { left: 8%; top: 42%; transform: translateY(-50%); }
-.touch.local .tri.fire span { left: 42%; bottom: 8%; transform: translateX(-50%); }
+.touch.local .tri.fire span { left: 8%; top: 42%; transform: translateY(-50%); }
+.touch.local .tri.rot span { left: 42%; bottom: 8%; transform: translateX(-50%); }
 .touch.local .tri svg { width: 30px; height: 30px; }

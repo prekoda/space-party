@@ -122,7 +122,7 @@ const Input = {
       el.className = (i < 4 ? 'corner c' : 'pair pos') + i;
       el.style.setProperty('--c', h.color);
       if (i < 4) el.innerHTML = `<div class="tri rot"><span>${ROT_ICON}</span></div><div class="tri fire"><span>${FIRE_ICON}</span></div>`;
-      else el.innerHTML = `<div class="btn rot">${ROT_ICON}</div><div class="btn fire">${FIRE_ICON}</div>`;
+      else el.innerHTML = `<div class="btn fire">${FIRE_ICON}</div><div class="btn rot">${ROT_ICON}</div>`;
       root.appendChild(el);
       this.wire(el.querySelector('.rot'), h.ctrl, 'rot');
       this.wire(el.querySelector('.fire'), h.ctrl, 'fire');
