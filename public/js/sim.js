@@ -29,7 +29,7 @@
     RESPAWN: 360, RESPAWN_INVULN: 50, EJECT_INVULN: 4,
     LASER_CHARGE: 30, LASER_BEAM: 14,
     FREEZE: 150, JOUST: 720,
-    MINE_ARM: 36, MINE_FUSE: 22, MINE_TRIGGER: 58, MINE_BLAST: 95,
+    MINE_ARM: 36, MINE_FUSE: 60, MINE_TRIGGER: 75, MINE_BLAST: 120,
     MISSILE_BLAST: 55,
     COUNTDOWN: 120, ROUND_END: 110, SCORES: 270, OVER: 480, END_GRACE: 40,
     SUDDEN: 60 * 60, DRAW: 110 * 60,
@@ -1086,7 +1086,7 @@
         if (s.mode === 'd') continue;
         const d = Math.hypot(s.x - x, s.y - y);
         if (d < r + (s.mode === 'p' ? C.PILOT_R : C.SHIP_R)) {
-          this.hitShip(s, by, 'blast');
+          if (src === 'mine') this.laserKill(s, by); else this.hitShip(s, by, 'blast');
           if (s.mode !== 'd' && d > 1) { s.vx += (s.x - x) / d * 4; s.vy += (s.y - y) / d * 4; }
         }
       }
@@ -1105,7 +1105,12 @@
       for (const mn of this.mines) {
         if (mn.dead) continue;
         if (mn.arm > 0) { mn.arm--; continue; }
-        if (mn.fuse > 0) { if (--mn.fuse === 0) this.detonate(mn); continue; }
+        if (mn.fuse > 0) {
+          mn.fuse--;
+          if (mn.fuse === 0) { this.detonate(mn); continue; }
+          if (mn.fuse % (mn.fuse > 30 ? 15 : 8) === 0) this.ev({ e: 'beep', x: r1(mn.x), y: r1(mn.y) });
+          continue;
+        }
         for (const s of this.ships) {
           if (s.mode === 'd' || s.id === mn.owner) continue;
           if (Math.hypot(s.x - mn.x, s.y - mn.y) < C.MINE_TRIGGER) { mn.fuse = C.MINE_FUSE; this.ev({ e: 'beep', x: r1(mn.x), y: r1(mn.y) }); break; }

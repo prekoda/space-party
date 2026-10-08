@@ -95,7 +95,7 @@ const Input = {
 
   // Online: left half of the screen rotates, right half fires.
   // One player on a phone (online or vs bots): Astro Party-style corner triangles —
-  // rotate bottom-left, fire bottom-right. Each whole screen half is the touch area,
+  // fire bottom-left, rotate bottom-right. Each whole screen half is the touch area,
   // so the buttons are easy to hit without looking.
   buildTouchOnline(root, ctrl, color) {
     root.innerHTML = '';
@@ -108,8 +108,8 @@ const Input = {
       root.appendChild(z);
       return z;
     };
-    this.wire(mk('left', ROT_ICON), ctrl, 'rot');
-    this.wire(mk('right', FIRE_ICON), ctrl, 'fire');
+    this.wire(mk('left', FIRE_ICON), ctrl, 'fire');
+    this.wire(mk('right', ROT_ICON), ctrl, 'rot');
   },
 
   // Local (Astro Party style): each player owns a screen corner — a big triangle split into

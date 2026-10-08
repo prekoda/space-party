@@ -727,14 +727,28 @@ class Renderer {
     for (const m of fr.mi) {
       const armed = m.ar <= 0;
       const spr = this.get('mine' + m.c, () => sprite(MINE_ROWS, { '#': m.c }));
+      const mx = X(m.x), my = X(m.y);
+      if (m.fu > 0) {
+        // triggered: blast zone appears, mine spins up faster and faster, light strobes, then boom
+        const k = 1 - m.fu / SP.C.MINE_FUSE, R = Math.round(SP.C.MINE_BLAST / PX);
+        b.globalAlpha = 0.12 + 0.18 * k; b.fillStyle = '#ff2a4a';
+        for (let yy = -R; yy <= R; yy++) for (let xx = -R; xx <= R; xx++) if (xx * xx + yy * yy <= R * R && ((xx + yy) & 1)) b.fillRect(mx + xx, my + yy, 1, 1);
+        b.globalAlpha = 0.6 + 0.4 * k; b.fillStyle = Math.floor(t * (6 + k * 20)) % 2 ? '#ff2a4a' : '#ffd23f';
+        this.pring(b, mx, my, R, 2);
+        b.globalAlpha = 1;
+        this.mineSpin = (this.mineSpin || 0);
+        const ang = t * (4 + k * k * 40);
+        b.save(); b.translate(mx, my); b.rotate(Math.round(ang / (Math.PI / 8)) * (Math.PI / 8)); b.drawImage(spr, -4.5, -4.5); b.restore();
+        const lit = Math.floor(t * (8 + k * 30)) % 2;
+        b.fillStyle = lit ? '#ff2a4a' : '#ffffff'; b.fillRect(mx - 1, my - 1, 3, 3);
+        continue;
+      }
       b.globalAlpha = armed ? 1 : 0.5;
-      b.drawImage(spr, X(m.x) - 4, X(m.y) - 4);
-      const lit = m.fu > 0 ? Math.floor(t * 20) % 2 : Math.floor(t * 2) % 2;
-      b.fillStyle = m.fu > 0 ? (lit ? '#ff4766' : '#ffffff') : (lit && armed ? '#ffffff' : '#222222');
-      b.fillRect(X(m.x) - 1, X(m.y) - 1, 2, 2);
+      b.drawImage(spr, mx - 4, my - 4);
+      const lit = Math.floor(t * 2) % 2;
+      b.fillStyle = lit && armed ? '#ffffff' : '#222222';
+      b.fillRect(mx - 1, my - 1, 2, 2);
       b.globalAlpha = 1;
-      if (m.fu > 0) { b.fillStyle = 'rgba(255,71,102,0.75)'; this.pring(b, X(m.x), X(m.y), Math.round(SP.C.MINE_BLAST / PX), 2); }
-      else if (armed) { b.fillStyle = m.c; b.globalAlpha = 0.45; this.pring(b, X(m.x), X(m.y), Math.round(SP.C.MINE_TRIGGER / PX), 3); b.globalAlpha = 1; }
     }
   }
 
