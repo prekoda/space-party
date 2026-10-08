@@ -18,6 +18,7 @@ class OnlineSession {
     this.clockOff = null; this.acc = 0; this.ping = 0;
     this.blockCache = { key: '', arr: [] };
     this.inGame = false;
+    this.fireBuf = 0; this.localCd = 0; this.shotSeqs = []; this.echo = [];
 
     const s = this.socket;
     s.on('s', snap => this.onSnap(snap));
@@ -39,7 +40,7 @@ class OnlineSession {
   leave() { this.socket.emit('leave'); this.code = null; this.reset(); }
   send(ev, data) { this.socket.emit(ev, data); }
   destroy() { clearInterval(this.pingTimer); this.socket.disconnect(); }
-  reset() { this.snaps = []; this.latest = null; this.evQ = []; this.pending = []; this.pred = null; this.clockOff = null; }
+  reset() { this.snaps = []; this.latest = null; this.evQ = []; this.pending = []; this.pred = null; this.clockOff = null; this.shotSeqs = []; this.echo = []; this.fireBuf = 0; }
 
   blocksOf(snap) {
     if (this.blockCache.key !== snap.bk) this.blockCache = { key: snap.bk, arr: [...snap.bk].map(c => c === '1') };
@@ -54,7 +55,7 @@ class OnlineSession {
     const off = s.f - now / SP.TICK_MS;
     // Track the earliest-arriving packets; jitter is absorbed by the interpolation delay.
     if (this.clockOff === null || Math.abs(off - this.clockOff) > 40) this.clockOff = off;
-    else this.clockOff += (off - this.clockOff) * (off > this.clockOff ? 0.25 : 0.02);
+    else this.clockOff += (off - this.clockOff) * (off > this.clockOff ? 0.08 : 0.015);
     if (this.latest && s.rd !== this.latest.rd) this.snaps = [];
     this.snaps.push(s);
     if (this.snaps.length > 40) this.snaps.shift();
@@ -67,6 +68,7 @@ class OnlineSession {
     const me = s.sh.find(x => x.id === this.me);
     const ack = s.ak[this.me] || 0;
     while (this.pending.length && this.pending[0].seq <= ack) this.pending.shift();
+    while (this.shotSeqs.length && this.shotSeqs[0] <= ack) this.shotSeqs.shift();
     if (!me || me.m === 'd' || (s.ph !== 'countdown' && s.ph !== 'play')) { this.pred = null; return; }
     const base = SP.shipFromSnap(me);
     const w = this.worldOf(s);
@@ -92,7 +94,7 @@ class OnlineSession {
     if (!this.inGame) { this.ctrl.sample(); return; }
     const inp = this.ctrl.sample();
     this.seq++;
-    this.socket.emit('i', [this.seq, inp.r, inp.f, inp.d]);
+    this.socket.emit('i', [this.seq, inp.r, inp.f, inp.d, inp.h]);
     this.pending.push({ seq: this.seq, inp });
     if (this.pending.length > 90) this.pending.shift();
     if (!this.pred || !this.predWorld) return;
@@ -100,20 +102,28 @@ class OnlineSession {
     this.predWorld.tick++;
     SP.moveShip(this.pred, inp, this.predWorld);
     const entry = this.pending[this.pending.length - 1];
-    // Instant local feedback; the server's own versions of these events are skipped.
+    // Instant local feedback; matching server events are skipped so nothing plays twice.
     if (this.pred.dashCd > dashBefore) this.r.fx({ e: 'dash', id: this.me }, this.lastFrame || this.latest, true);
-    if (inp.f && this.latest) {
+    // Mirror the server's fire buffer + cooldown so a predicted shot is one the server will really fire.
+    if (this.localCd > 0) this.localCd--;
+    if (inp.f) this.fireBuf = SP.C.FIRE_BUF;
+    if (this.fireBuf > 0 && this.latest) {
+      this.fireBuf--;
       const me = this.latest.sh.find(x => x.id === this.me);
-      const firesPending = this.pending.reduce((n, p) => n + p.inp.f, 0) - 1;
-      if (me && me.m === 's' && me.fr <= 0 && me.ch <= 0 && me.bm <= 0) {
-        if (me.pw) { if (me.pw !== 'laser' && me.pw !== 'mine') { this.localShot(me.pw); entry.recoil = SP.C.RECOIL * 1.5; } }
-        else if (me.am - firesPending > 0) { this.localShot(null); entry.recoil = SP.C.RECOIL; }
-        if (entry.recoil) recoil(this.pred, entry.recoil);
+      if (!me || me.m !== 's' || me.fr > 0) this.fireBuf = 0;
+      else if (this.localCd === 0 && me.ch <= 0 && me.bm <= 0) {
+        this.fireBuf = 0;
+        this.localCd = SP.C.FIRE_CD;
+        if (me.pw) {
+          if (me.pw !== 'laser' && me.pw !== 'mine') { this.localShot(me.pw); entry.recoil = SP.C.RECOIL * 1.5; }
+        } else if (me.am - this.shotSeqs.length > 0) { this.localShot(null); entry.recoil = SP.C.RECOIL; }
         else Sfx.play('dry');
+        if (entry.recoil) { recoil(this.pred, entry.recoil); this.shotSeqs.push(entry.seq); }
       }
     }
   }
   localShot(pw) {
+    this.echo.push(performance.now());
     const k = pw === 'triple' ? 't' : pw === 'homing' ? 'm' : pw === 'freeze' ? 'i' : 'n';
     this.r.fx({ e: 'shot', id: this.me, k }, this.lastFrame || this.latest, true);
   }
@@ -132,7 +142,8 @@ class OnlineSession {
     while (this.snaps.length > 2 && this.snaps[1].f < rf - 30) this.snaps.shift();
     let alpha = 0;
     if (b && b.f > a.f && a.f <= rf) alpha = Math.min(1, (rf - a.f) / (b.f - a.f));
-    else if (!b) b = a;
+    let ext = 0;
+    if (!b) { b = a; ext = Math.min(6, Math.max(0, rf - a.f)); }
     const L = this.latest;
 
     const lerpList = (la, lb, f) => {
@@ -140,7 +151,7 @@ class OnlineSession {
       return lb.map(o => { const p = byId.get(o.id); return p ? f(p, o) : o; });
     };
     const ships = lerpList(a.sh, b.sh, (p, o) => Object.assign({}, o, {
-      x: p.x + (o.x - p.x) * alpha, y: p.y + (o.y - p.y) * alpha, a: p.a + SP.adiff(o.a, p.a) * alpha,
+      x: p.x + (o.x - p.x) * alpha + o.vx * ext, y: p.y + (o.y - p.y) * alpha + o.vy * ext, a: p.a + SP.adiff(o.a, p.a) * alpha,
     }));
     // Own ship: predicted position, freshest status flags.
     const mine = L.sh.find(s => s.id === this.me);
@@ -164,8 +175,9 @@ class OnlineSession {
     const samePh = a.ph === b.ph;
     const fr = {
       ph: b.ph, pt: samePh ? a.pt + (b.pt - a.pt) * alpha : b.pt, rd: b.rd, map: SP.MAP_BY_ID[b.map], sd: b.sd, tg: b.tg, rw: b.rw, mw: b.mw,
-      pl: L.pl, bk: b.bk, t: a.t + (b.t - a.t) * alpha,
-      sh: ships, bu: bullets, mi: b.mi, it: b.it, cr: b.cr, as: asteroids,
+      pl: L.pl, bk: b.bk, t: a.t + (b.t - a.t) * alpha, sk: (a.sk || 0) + ((b.sk || 0) - (a.sk || 0)) * alpha,
+      sh: ships, bu: bullets, mi: b.mi, it: b.it, as: asteroids,
+      cr: lerpList(a.cr, b.cr, (p, o) => Object.assign({}, o, { x: p.x + (o.x - p.x) * alpha, y: p.y + (o.y - p.y) * alpha })),
     };
     this.lastFrame = fr;
 
@@ -173,7 +185,12 @@ class OnlineSession {
     while (this.evQ.length && (this.evQ[0].f <= rf + 1 || this.evQ.length > 200)) {
       const e = this.evQ.shift();
       const isMe = e.id === this.me;
-      if (isMe && (e.e === 'shot' || e.e === 'dash' || e.e === 'dry')) continue;
+      if (isMe && (e.e === 'dash' || e.e === 'dry')) continue;
+      if (isMe && e.e === 'shot') {
+        const now = performance.now();
+        while (this.echo.length && now - this.echo[0] > 1200) this.echo.shift();
+        if (this.echo.length) { this.echo.shift(); continue; } // already shown locally
+      }
       this.r.fx(e, fr, isMe);
     }
     return fr;

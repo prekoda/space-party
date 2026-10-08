@@ -1,22 +1,30 @@
 // Controls: one button rotates (hold), one fires (tap). Double-tap rotate = dash.
-const DOUBLE_TAP_MS = 260;
+// A dash needs a quick tap followed by a quick re-press, so holding to aim never dashes by accident.
+const DOUBLE_TAP_GAP_MS = 200, TAP_MAX_MS = 170;
 
 class Controller {
   constructor() { this.reset(); }
-  reset() { this.sources = new Set(); this.fireQ = 0; this.dashQ = 0; this.lastPress = -1e9; }
+  reset() { this.sources = new Set(); this.fireHeld = new Set(); this.fireQ = 0; this.dashQ = 0; this.pressAt = -1e9; this.releaseAt = -1e9; this.tapped = false; }
   rotDown(src) {
     if (this.sources.has(src)) return;
     if (!this.sources.size) {
       const now = performance.now();
-      if (now - this.lastPress < DOUBLE_TAP_MS) { this.dashQ = 1; this.lastPress = -1e9; }
-      else this.lastPress = now;
+      if (this.tapped && now - this.releaseAt < DOUBLE_TAP_GAP_MS) { this.dashQ = 1; this.tapped = false; }
+      this.pressAt = now;
     }
     this.sources.add(src);
   }
-  rotUp(src) { this.sources.delete(src); }
+  rotUp(src) {
+    if (!this.sources.delete(src) || this.sources.size) return;
+    const now = performance.now();
+    this.tapped = now - this.pressAt < TAP_MAX_MS;
+    this.releaseAt = now;
+  }
   fire() { this.fireQ = 1; }
+  fireDown(src) { if (!this.fireHeld.has(src)) { this.fireHeld.add(src); this.fire(); } }
+  fireUp(src) { this.fireHeld.delete(src); }
   sample() {
-    const i = { r: this.sources.size ? 1 : 0, f: this.fireQ, d: this.dashQ };
+    const i = { r: this.sources.size ? 1 : 0, f: this.fireQ, d: this.dashQ, h: this.fireHeld.size ? 1 : 0 };
     this.fireQ = 0; this.dashQ = 0;
     return i;
   }
@@ -35,7 +43,7 @@ const KEYMAPS = [
 const Input = {
   controllers: [],   // controllers[i] is driven by KEYMAPS[i]
   enabled: false,
-  isTouch: matchMedia('(pointer: coarse)').matches || 'ontouchstart' in window,
+  isTouch: matchMedia('(pointer: coarse)').matches,
 
   init() {
     const find = code => {
@@ -52,13 +60,14 @@ const Input = {
       if (!hit) return;
       e.preventDefault();
       if (e.repeat) return;
-      if (hit[1] === 'rot') hit[0].rotDown('k'); else hit[0].fire();
+      if (hit[1] === 'rot') hit[0].rotDown('k'); else hit[0].fireDown('k');
     });
     addEventListener('keyup', e => {
       const hit = find(e.code);
       if (hit && hit[1] === 'rot') hit[0].rotUp('k');
+      if (hit && hit[1] === 'fire') hit[0].fireUp('k');
     });
-    const releaseAll = () => this.controllers.forEach(c => c.sources.clear());
+    const releaseAll = () => this.controllers.forEach(c => { c.sources.clear(); c.fireHeld.clear(); });
     addEventListener('blur', releaseAll);
     document.addEventListener('visibilitychange', releaseAll);
   },
@@ -72,11 +81,11 @@ const Input = {
       try { el.setPointerCapture(e.pointerId); } catch (_) { }
       el.classList.add('down');
       Sfx.unlock();
-      if (action === 'rot') ctrl.rotDown('p' + e.pointerId); else ctrl.fire();
+      if (action === 'rot') ctrl.rotDown('p' + e.pointerId); else ctrl.fireDown('p' + e.pointerId);
     });
     const up = e => {
       el.classList.remove('down');
-      if (action === 'rot') ctrl.rotUp('p' + e.pointerId);
+      if (action === 'rot') ctrl.rotUp('p' + e.pointerId); else ctrl.fireUp('p' + e.pointerId);
     };
     el.addEventListener('pointerup', up);
     el.addEventListener('pointercancel', up);
@@ -99,18 +108,20 @@ const Input = {
     this.wire(mk('right', FIRE_ICON), ctrl, 'fire');
   },
 
-  // Local: each human gets a rotate/fire pair on their own edge of the tablet.
+  // Local (Astro Party style): each player owns a screen corner — a big triangle split into
+  // a rotate half and a fire half, turned to face whoever sits at that corner.
   buildTouchLocal(root, humans) {
     root.innerHTML = '';
     root.className = 'touch local';
     humans.forEach((h, i) => {
-      const pair = document.createElement('div');
-      pair.className = 'pair pos' + i;
-      pair.style.setProperty('--c', h.color);
-      pair.innerHTML = `<div class="btn rot">${ROT_ICON}</div><div class="btn fire">${FIRE_ICON}</div>`;
-      root.appendChild(pair);
-      this.wire(pair.querySelector('.rot'), h.ctrl, 'rot');
-      this.wire(pair.querySelector('.fire'), h.ctrl, 'fire');
+      const el = document.createElement('div');
+      el.className = (i < 4 ? 'corner c' : 'pair pos') + i;
+      el.style.setProperty('--c', h.color);
+      if (i < 4) el.innerHTML = `<div class="tri rot"><span>${ROT_ICON}</span></div><div class="tri fire"><span>${FIRE_ICON}</span></div>`;
+      else el.innerHTML = `<div class="btn rot">${ROT_ICON}</div><div class="btn fire">${FIRE_ICON}</div>`;
+      root.appendChild(el);
+      this.wire(el.querySelector('.rot'), h.ctrl, 'rot');
+      this.wire(el.querySelector('.fire'), h.ctrl, 'fire');
     });
   },
 };

@@ -49,6 +49,7 @@ class Room {
     const g = this.game;
     return {
       code: this.code, host: this.host, phase: g.phase, settings: g.settings,
+      custom: this.custom && g.settings.map === this.custom.id ? this.custom : null,
       players: g.players.map(p => {
         const h = this.humans.get(p.id);
         return { id: p.id, name: p.name, color: p.color, bot: p.bot, score: p.score, away: !!(h && !h.sock) };
@@ -88,14 +89,14 @@ class Room {
     const g = this.game;
     const inputs = {};
     for (const [pid, h] of this.humans) {
-      if (!h.sock) { inputs[pid] = { r: 0, f: 0, d: 0 }; continue; }
+      if (!h.sock) { inputs[pid] = { r: 0, f: 0, d: 0, h: 0 }; continue; }
       // Merge any backlog so a lag spike doesn't leave the player permanently behind.
       while (h.q.length > 3) { const x = h.q.shift(); h.pf |= x.f; h.pd |= x.d; h.ack = x.s; }
       if (h.q.length) {
         const x = h.q.shift();
-        inputs[pid] = { r: x.r, f: x.f | h.pf, d: x.d | h.pd };
-        h.pf = h.pd = 0; h.ack = x.s; h.lastR = x.r;
-      } else inputs[pid] = { r: h.lastR, f: 0, d: 0 };
+        inputs[pid] = { r: x.r, f: x.f | h.pf, d: x.d | h.pd, h: x.h };
+        h.pf = h.pd = 0; h.ack = x.s; h.lastR = x.r; h.lastH = x.h;
+      } else inputs[pid] = { r: h.lastR, f: 0, d: 0, h: h.lastH || 0 };
     }
     g.step(inputs);
 
@@ -147,13 +148,20 @@ io.on('connection', sock => {
     if (!room || !Array.isArray(a)) return;
     const h = room.humans.get(pid);
     if (!h || h.sock !== sock || h.q.length > 30) return;
-    h.q.push({ s: a[0] | 0, r: a[1] ? 1 : 0, f: a[2] ? 1 : 0, d: a[3] ? 1 : 0 });
+    h.q.push({ s: a[0] | 0, r: a[1] ? 1 : 0, f: a[2] ? 1 : 0, d: a[3] ? 1 : 0, h: a[4] ? 1 : 0 });
   });
 
   sock.on('settings', o => {
     if (!isHost() || !o) return;
     const s = room.game.settings;
-    if (o.map === 'random' || SP.MAP_BY_ID[o.map]) s.map = o.map;
+    if (o.custom && o.map === o.custom.id && SP.validateMapDef(o.custom)) {
+      // Host-made map: validate, build, and keep it only for this room.
+      try {
+        const def = { id: o.custom.id, name: o.custom.name, theme: o.custom.theme, grid: o.custom.grid.slice() };
+        room.game.extraMaps = { [def.id]: SP.buildGridMap(def) };
+        room.custom = def; s.map = def.id;
+      } catch (e) { }
+    } else if (o.map === 'random' || SP.MAP_BY_ID[o.map]) s.map = o.map;
     if ([5, 7, 10, 15].includes(o.target)) s.target = o.target;
     room.broadcastLobby();
   });

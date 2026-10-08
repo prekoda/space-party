@@ -1,9 +1,9 @@
 // Service worker: makes the app installable and lets Local Party run offline.
 // Network-first for app files (so updates land immediately), cache fallback when offline.
-const CACHE = 'spaceparty-v2';
+const CACHE = 'spaceparty-v8';
 const SHELL = [
   '/', '/index.html', '/style.css', '/manifest.webmanifest',
-  '/js/sim.js', '/js/audio.js', '/js/input.js', '/js/render.js', '/js/net.js', '/js/main.js',
+  '/js/sim.js', '/js/audio.js', '/js/input.js', '/js/render.js', '/js/net.js', '/js/editor.js', '/js/main.js',
   '/icons/icon-192.png', '/icons/icon-512.png', '/icons/icon-180.png',
 ];
 

@@ -10,6 +10,7 @@
 
   const renderer = new Renderer($('#cv'));
   Input.init();
+  MapStore.registerAll();
 
   let pid = sessionStorage.getItem('sp-pid');
   if (!pid) { pid = 'u' + Math.random().toString(36).slice(2, 12); sessionStorage.setItem('sp-pid', pid); }
@@ -32,7 +33,15 @@
   }
   document.addEventListener('click', e => {
     const go = e.target.closest('[data-go]');
-    if (go) { Sfx.unlock(); Sfx.play('ui'); show(go.dataset.go); if (go.dataset.go === 'local') renderLocal(); }
+    if (go) {
+      Sfx.unlock(); Sfx.play('ui');
+      const to = go.dataset.go === 'home' && curScreen === 'editor' && editorFrom !== 'home' ? editorFrom : go.dataset.go;
+      if (to === 'editor') editorFrom = curScreen;
+      show(to);
+      if (to === 'local') { refreshMapChips(); renderLocal(); }
+      if (to === 'editor') editor.open();
+      if (to === 'lobby') refreshMapChips();
+    }
   });
 
   // ------------------------------------------------------------------ name & sound
@@ -45,6 +54,16 @@
   muteBtn.onclick = () => { Sfx.setMuted(!Sfx.muted); syncMute(); };
   $('#btn-hud-mute').onclick = () => { Sfx.setMuted(!Sfx.muted); syncMute(); };
   syncMute();
+  const musicBtn = $('#btn-music');
+  const syncMusic = () => { musicBtn.textContent = Sfx.music ? 'Music: on' : 'Music: off'; $('#btn-hud-music').classList.toggle('off', !Sfx.music); };
+  musicBtn.onclick = () => { Sfx.setMusic(!Sfx.music); syncMusic(); };
+  $('#btn-hud-music').onclick = () => { Sfx.setMusic(!Sfx.music); syncMusic(); };
+  syncMusic();
+  // Browsers only allow audio after a user gesture: unlock on the first touch/click/key.
+  const unlockAudio = () => Sfx.unlock();
+  addEventListener('pointerdown', unlockAudio, true);
+  addEventListener('keydown', unlockAudio, true);
+  Music.play('menu');
 
   // ------------------------------------------------------------------ local session
   class LocalSession {
@@ -95,18 +114,33 @@
   // ------------------------------------------------------------------ map & target pickers
   function buildChips(root, onPick) {
     root.innerHTML = '';
-    const opts = [{ id: 'random', name: 'Random' }, ...SP.MAPS];
+    const custom = MapStore.all().map(d => SP.MAP_BY_ID[d.id]).filter(Boolean);
+    const opts = [{ id: 'random', name: 'Random' }, ...custom, ...SP.MAPS, { id: 'new', name: '+ New map' }];
     for (const m of opts) {
       const b = document.createElement('button');
-      b.className = 'chip map'; b.dataset.v = m.id;
+      b.className = 'chip map' + (m.id.startsWith('c_') ? ' custom' : ''); b.dataset.v = m.id;
       if (m.id === 'random') b.innerHTML = `<div class="thumb rnd">?</div><span>Rotation</span>`;
+      else if (m.id === 'new') b.innerHTML = `<div class="thumb rnd">+</div><span>New map</span>`;
       else {
-        b.innerHTML = `<canvas class="thumb" width="128" height="80"></canvas><span>${m.name}</span>`;
+        b.innerHTML = `<canvas class="thumb" width="128" height="80"></canvas><span></span>`;
+        b.querySelector('span').textContent = (m.id.startsWith('c_') ? '★ ' : '') + m.name;
         drawMapThumb(b.querySelector('canvas'), m);
       }
-      b.onclick = () => { Sfx.play('ui'); onPick(m.id); };
+      b.onclick = () => { Sfx.play('ui'); if (m.id === 'new') { editorFrom = curScreen; show('editor'); editor.newMap(); editor.open(); } else onPick(m.id); };
       root.appendChild(b);
     }
+  }
+  function refreshMapChips() {
+    buildChips($('#local-maps'), id => { localSettings.map = id; renderLocal(); });
+    buildChips($('#lobby-maps'), pickLobbyMap);
+    if (!SP.MAP_BY_ID[localSettings.map] && localSettings.map !== 'random') localSettings.map = 'random';
+    mark($('#local-maps'), localSettings.map);
+    if (lobby) mark($('#lobby-maps'), lobby.settings.map);
+  }
+  function pickLobbyMap(id) {
+    if (!online) return;
+    if (id.startsWith('c_')) online.send('settings', { map: id, custom: MapStore.get(id) });
+    else online.send('settings', { map: id });
   }
   function buildTargets(root, onPick) {
     root.innerHTML = '';
@@ -124,10 +158,9 @@
   if (!Array.isArray(slots) || !slots.length) slots = [{ type: 'human', color: SP.COLORS[0] }, { type: 'bot', level: 'normal', color: SP.COLORS[1] }];
   const localSettings = store.get('localSettings', { map: 'random', target: 10 });
   const touchChk = $('#chk-touch');
-  touchChk.checked = store.get('touch', Input.isTouch);
-  touchChk.onchange = () => store.set('touch', touchChk.checked);
+  // On by default only on phones/tablets; the toggle is a per-session override.
+  touchChk.checked = Input.isTouch;
 
-  buildChips($('#local-maps'), id => { localSettings.map = id; renderLocal(); });
   buildTargets($('#local-target'), t => { localSettings.target = t; renderLocal(); });
 
   function freeColor(except) {
@@ -183,20 +216,37 @@
     if (slots.length < 2) return;
     let hi = 0;
     const named = slots.map(s => s.type === 'human' ? Object.assign({}, s, { name: hi++ === 0 && nameIn.value.trim() ? nameIn.value.trim() : 'P' + hi }) : s);
-    local = new LocalSession(named, localSettings, { onEnd: endLocal });
-    mode = 'local';
-    Input.bind(local.humans.map(h => h.ctrl));
-    Input.enabled = true;
-    document.body.classList.toggle('touch-local', touchChk.checked);
-    if (touchChk.checked) Input.buildTouchLocal($('#touch'), local.humans);
-    else $('#touch').innerHTML = '';
-    enterGameUi();
+    startLocal(named, localSettings);
   };
   function endLocal() {
     local = null;
     leaveGameUi();
+    if (returnTo === 'editor') { returnTo = null; show('editor'); editor.open(); return; }
     show('local'); renderLocal();
   }
+  function startLocal(named, settings) {
+    local = new LocalSession(named, settings, { onEnd: endLocal });
+    mode = 'local';
+    Input.bind(local.humans.map(h => h.ctrl));
+    Input.enabled = true;
+    // Several people on one device: Astro Party corners. One person vs bots: big half-screen buttons.
+    const multi = local.humans.length > 1;
+    document.body.classList.toggle('touch-local', touchChk.checked && multi);
+    if (!touchChk.checked) $('#touch').innerHTML = '';
+    else if (multi) Input.buildTouchLocal($('#touch'), local.humans);
+    else Input.buildTouchOnline($('#touch'), local.humans[0].ctrl, local.humans[0].color);
+    enterGameUi();
+  }
+
+  let returnTo = null, editorFrom = 'home';
+  const editor = new MapEditor({
+    toast,
+    onChange: refreshMapChips,
+    onTest: def => {
+      returnTo = 'editor';
+      startLocal([{ type: 'human', color: SP.COLORS[0], name: nameIn.value.trim() || 'P1' }, { type: 'bot', level: 'normal', color: SP.COLORS[1] }], { map: def.id, target: 3 });
+    },
+  });
 
   // ------------------------------------------------------------------ online
   function ensureOnline() {
@@ -231,8 +281,8 @@
     if (lobby && lobby.phase === 'lobby') show('lobby');
   }
 
-  buildChips($('#lobby-maps'), id => online && online.send('settings', { map: id }));
   buildTargets($('#lobby-target'), t => online && online.send('settings', { target: t }));
+  refreshMapChips();
   $$('[data-bot]').forEach(b => { b.onclick = () => { Sfx.play('ui'); online.send('addBot', { level: b.dataset.bot }); }; });
   $('#btn-start').onclick = () => { Sfx.play('ui'); online.send('start'); };
   $('#btn-leave').onclick = () => { leaveRoom(); show('online'); };
@@ -257,6 +307,7 @@
 
   function onLobby(st) {
     lobby = st;
+    if (st.custom) { try { if (!SP.MAP_BY_ID[st.custom.id]) SP.registerMap(st.custom); } catch (e) { } }
     renderLobby(st);
     if (st.phase === 'lobby') {
       if (mode === 'online') { mode = 'menu'; online.inGame = false; online.reset(); leaveGameUi(); }
@@ -306,7 +357,7 @@
     const hostName = (st.players.find(p => p.id === st.host) || {}).name || 'host';
     $('#lobby-wait').textContent = host
       ? (st.players.length < 2 ? 'Share the code or add a bot to start' : `${st.players.length} pilots ready`)
-      : `Waiting for ${hostName} to start… (map: ${st.settings.map === 'random' ? 'Rotation' : SP.MAP_BY_ID[st.settings.map].name}, first to ${st.settings.target})`;
+      : `Waiting for ${hostName} to start… (map: ${st.settings.map === 'random' ? 'Rotation' : (SP.MAP_BY_ID[st.settings.map] || { name: 'Custom' }).name}, first to ${st.settings.target})`;
     mark($('#lobby-maps'), st.settings.map);
     mark($('#lobby-target'), st.settings.target);
   }
@@ -322,6 +373,7 @@
     lastScoreKey = '';
     renderer.parts = [];
     renderer.setHud(true);
+    Music.play('battle');
     if (Input.isTouch) {
       const el = document.documentElement;
       const lock = () => { try { window.screen.orientation.lock('landscape').catch(() => { }); } catch (e) { } };
@@ -334,6 +386,7 @@
   function leaveGameUi() {
     document.body.classList.remove('ingame', 'touch-local');
     renderer.setHud(false);
+    Music.play('menu'); Music.setIntensity(1);
     $('#hud').hidden = true; $('#spectate').hidden = true;
     $('#touch').innerHTML = '';
     Input.enabled = false; Input.bind([]);
@@ -361,7 +414,7 @@
     online.send('endMatch'); resume();
   };
   $('#btn-quit').onclick = () => {
-    if (mode === 'local') { local = null; mode = 'menu'; leaveGameUi(); show('home'); return; }
+    if (mode === 'local') { local = null; mode = 'menu'; leaveGameUi(); if (returnTo === 'editor') { returnTo = null; show('editor'); editor.open(); } else show('home'); return; }
     leaveRoom(); show('home');
   };
   addEventListener('keydown', e => {
@@ -426,14 +479,19 @@
       fr = online.frame();
       opts = { me: online.me, names: true, overHint: 'Back to the lobby in a moment…' };
     } else if (mode === 'local' && local) {
-      local.update(dt);
+      local.update(dt * renderer.timeScale());
       fr = local && local.fr;
+      if (local) opts = { localRev: local.humanIds };
     } else {
       if (!attract) startAttract();
       attract.update(dt);
       fr = attract && attract.fr;
     }
     renderer.silent = mode === 'menu';
+    if (mode !== 'menu' && fr) {
+      const paused = mode === 'local' && local && local.paused;
+      Music.setIntensity(paused || fr.ph === 'scores' || fr.ph === 'over' || fr.ph === 'roundEnd' ? 0 : fr.sd ? 2 : 1);
+    }
     renderer.draw(fr, dt, opts);
     updateHud(fr);
     requestAnimationFrame(loop);

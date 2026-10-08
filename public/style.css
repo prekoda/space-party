@@ -7,7 +7,7 @@
   --accent: #45c8ff;
   --hot: #ff4766;
   --gold: #ffd23f;
-  --font: "Russo One", "Arial Black", system-ui, sans-serif;
+  --font: "Press Start 2P", monospace;
 }
 
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
@@ -192,3 +192,66 @@ body[data-hud=side] #scorebar .tgt { align-self: flex-start; padding-left: 4px; 
 body.touch-local #hud-right { position: fixed; left: 50%; bottom: max(10px, env(safe-area-inset-bottom)); transform: translateX(-50%); }
 body.touch-local #hud { justify-content: center; }
 body.touch-local #hud-left { display: none; }
+.icon-btn.off { opacity: .4; text-decoration: line-through; }
+
+/* ---------------------------------------------------------------- pixel-art theme (Astro Party look) */
+.screen { border-radius: 0; border: 4px solid #1f4fd8; box-shadow: 0 0 0 4px #000, 0 0 0 8px #7fb2ff22, 0 20px 80px rgba(0,0,0,.7); background: rgba(5, 5, 12, 0.94); }
+.logo { font-size: clamp(28px, 6vw, 46px); line-height: 1.15; letter-spacing: 0; text-shadow: 4px 4px 0 #000, 0 0 18px rgba(127,178,255,.4); }
+.logo span { font-size: .72em; letter-spacing: 6px; text-shadow: 4px 4px 0 #000, 0 0 18px rgba(255,71,102,.5); }
+h2 { font-size: 20px; text-shadow: 3px 3px 0 #000; }
+h3 { font-size: 13px; line-height: 1.5; }
+.label { font-size: 10px; }
+.btn { font-size: 13px; border-radius: 0; border-width: 3px; padding: 14px 16px; box-shadow: 4px 4px 0 #000; text-transform: uppercase; }
+.btn:active { transform: translate(2px, 2px); box-shadow: 2px 2px 0 #000; }
+.btn.primary { background: #e2304f; border-color: #ff8ea1; box-shadow: 4px 4px 0 #000; }
+.btn.primary:hover { background: #ff4766; }
+.btn.small { font-size: 10px; padding: 10px 12px; border-radius: 0; }
+input { border-radius: 0; border-width: 3px; }
+#in-code { font-size: 20px; letter-spacing: 6px; }
+.code { font-size: 32px; letter-spacing: 6px; text-shadow: 4px 4px 0 #000; }
+.players li, .help-card, .powers > div { border-radius: 0; }
+.swatch { border-radius: 0; box-shadow: 3px 3px 0 #000; }
+.players .tag { font-size: 8px; border-radius: 0; }
+kbd { font-size: 10px; border-radius: 0; }
+.chip { font-size: 10px; border-radius: 0; border-width: 3px; }
+.chip.map { font-size: 8px; }
+.chip.map .thumb, canvas[data-icon] { image-rendering: pixelated; border-radius: 0; }
+.powers b { font-size: 10px; }
+#scorebar { font-size: 9px; }
+#scorebar .sc { border-radius: 0; border-width: 2px; padding: 4px 6px; }
+#hud-left { font-size: 9px; }
+.icon-btn { border-radius: 0; border-width: 2px; }
+#spectate, #toast { border-radius: 0; font-size: 11px; }
+#rotate-hint { font-size: 14px; }
+@media (max-height: 480px) {
+  .logo { font-size: 26px; }
+  .btn { font-size: 11px; padding: 10px 12px; }
+  .code { font-size: 24px; }
+}
+.code { line-height: 1.5; margin-top: 4px; }
+
+/* ---------------------------------------------------------------- map editor */
+.screen.editor { width: min(980px, 100%); }
+.ed-top { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.ed-top h2 { margin-right: auto; }
+.ed-top input { width: 200px; text-align: left; font-size: 14px; padding: 9px 10px; }
+select { font: inherit; font-family: var(--font); font-size: 10px; color: var(--text); background: #05050c; border: 3px solid var(--line); padding: 9px 8px; border-radius: 0; }
+#ed-canvas { width: 100%; aspect-ratio: 32 / 20; image-rendering: pixelated; border: 3px solid #1f4fd8; touch-action: none; cursor: crosshair; background: #000; }
+.chip.tool { display: flex; align-items: center; gap: 6px; padding: 7px 9px; }
+.chip.tool .sw { width: 12px; height: 12px; display: inline-block; border: 1px solid rgba(255,255,255,.4); }
+
+/* ---------------------------------------------------------------- local corner controls (Astro Party style) */
+.touch.local .corner { position: absolute; width: min(36vmin, 280px); height: min(36vmin, 280px); pointer-events: none; }
+.touch.local .corner.c0 { left: 0; bottom: 0; }
+.touch.local .corner.c1 { right: 0; top: 0; transform: rotate(180deg); }
+.touch.local .corner.c2 { right: 0; bottom: 0; transform: rotate(-90deg); }
+.touch.local .corner.c3 { left: 0; top: 0; transform: rotate(90deg); }
+.touch.local .tri { position: absolute; inset: 0; pointer-events: auto; touch-action: none; background: color-mix(in srgb, var(--c) 22%, transparent); }
+/* the corner's big right triangle is split from the corner to the middle of its long edge */
+.touch.local .tri.rot { clip-path: polygon(0 100%, 0 0, 50% 50%); }
+.touch.local .tri.fire { clip-path: polygon(0 100%, 100% 100%, 50% 50%); background: color-mix(in srgb, var(--c) 34%, transparent); }
+.touch.local .tri.down { background: color-mix(in srgb, var(--c) 60%, transparent); }
+.touch.local .tri span { position: absolute; color: #fff; opacity: .85; filter: drop-shadow(2px 2px 0 #000); }
+.touch.local .tri.rot span { left: 8%; top: 42%; transform: translateY(-50%); }
+.touch.local .tri.fire span { left: 42%; bottom: 8%; transform: translateX(-50%); }
+.touch.local .tri svg { width: 30px; height: 30px; }

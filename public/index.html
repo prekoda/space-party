@@ -16,7 +16,7 @@
   <link rel="apple-touch-icon" href="/icons/icon-180.png">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Russo+One&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/style.css">
 </head>
 
@@ -29,6 +29,7 @@
     <div id="hud-left"><span id="hud-room"></span><span id="hud-ping"></span></div>
     <div id="scorebar"></div>
     <div id="hud-right">
+      <button id="btn-hud-music" class="icon-btn" aria-label="Toggle music">♫</button>
       <button id="btn-hud-mute" class="icon-btn" aria-label="Toggle sound">🔊</button>
       <button id="btn-pause" class="icon-btn" aria-label="Pause">❚❚</button>
     </div>
@@ -44,10 +45,12 @@
       <div class="stack">
         <button class="btn primary" data-go="online">Play Online</button>
         <button class="btn" data-go="local">Local Party</button>
+        <button class="btn" data-go="editor">Map Editor</button>
         <button class="btn ghost" data-go="help">How to Play</button>
       </div>
       <div class="row">
         <button id="btn-install" class="btn ghost small" hidden>⬇ Install App</button>
+        <button id="btn-music" class="btn ghost small">Music: on</button>
         <button id="btn-mute" class="btn ghost small">Sound: on</button>
       </div>
       <p id="ios-hint" class="hint" hidden>To install on iPhone: tap <b>Share</b> → <b>Add to Home Screen</b></p>
@@ -134,18 +137,18 @@
           <p>Your ship always flies forward.</p>
           <p><kbd>→</kbd> hold to rotate</p>
           <p><kbd>↓</kbd> tap to shoot</p>
-          <p><kbd>→</kbd><kbd>→</kbd> double-tap to <b>dash</b></p>
+          <p><kbd>→</kbd><kbd>→</kbd> quick double-tap to <b>boost</b> (smashes blocks)</p>
           <p class="dim">Touch: left side rotates, right side fires.</p>
         </div>
         <div class="help-card">
           <h3>Rules</h3>
           <p>3 shots that reload. Get hit and your ship explodes — you <b>eject as a pilot</b>.</p>
-          <p>Pilots can't shoot, but survive 6s and you get a new ship.</p>
+          <p>As a pilot: <kbd>→</kbd> spins on the spot, <b>hold</b> <kbd>↓</kbd> to jet forward, <b>tap</b> <kbd>↓</kbd> to punch. A punch kills pilots, breaks orbs and knocks back a ship that rams you. Survive 6s for a new ship.</p>
           <p>Shoot or <b>ram</b> a pilot to eliminate them: <b>+1 point</b>. Last one alive: <b>+1</b>.</p>
           <p>Self-kills cost a point. First to the target wins.</p>
         </div>
       </div>
-      <h3>Powerups <span class="dim">— shoot or ram the <b class="gold">?</b> crates</span></h3>
+      <h3>Powerups <span class="dim">— shoot the drifting orange orbs to crack them open, then grab what pops out</span></h3>
       <div class="powers">
         <div><canvas data-icon="laser" width="44" height="44"></canvas><b>Laser</b><span>Charge, then a beam that cuts through everything. Keep turning to sweep it.</span></div>
         <div><canvas data-icon="triple" width="44" height="44"></canvas><b>Triple</b><span>Next 3 shots fire a spread of 3.</span></div>
@@ -155,8 +158,37 @@
         <div><canvas data-icon="freeze" width="44" height="44"></canvas><b>Freeze</b><span>Freezes a ship solid. Any hit then shatters it outright.</span></div>
         <div><canvas data-icon="shield" width="44" height="44"></canvas><b>Shield</b><span>Absorbs one hit of anything.</span></div>
         <div><canvas data-icon="joust" width="44" height="44"></canvas><b>Jouster</b><span>Side blades for 12s: slice ships, block bullets, extra speed.</span></div>
+        <div><canvas data-icon="reverse" width="44" height="44"></canvas><b>Reverse All</b><span>Flips everyone else's rotation for 8s. Chaos guaranteed.</span></div>
       </div>
       <button class="btn ghost" data-go="home">Back</button>
+    </section>
+
+    <!-- Map editor -->
+    <section id="scr-editor" class="screen wide editor" hidden>
+      <div class="ed-top">
+        <h2>Map Editor</h2>
+        <input id="ed-name" maxlength="20" placeholder="Map name" autocomplete="off" spellcheck="false">
+        <select id="ed-theme" aria-label="Theme"></select>
+        <select id="ed-sym" aria-label="Symmetry">
+          <option value="xy">Mirror 4-way</option>
+          <option value="x">Mirror left/right</option>
+          <option value="y">Mirror top/bottom</option>
+          <option value="none">No mirror</option>
+        </select>
+      </div>
+      <div id="ed-tools" class="chips"></div>
+      <canvas id="ed-canvas" width="640" height="400"></canvas>
+      <p class="hint">Tap or drag to paint. Paint over a tile to erase it. Hazards kill on touch; sun, spinner and crate spot are one per map.</p>
+      <div class="row">
+        <button class="btn ghost" data-go="home">Back</button>
+        <button id="ed-new" class="btn small">New</button>
+        <button id="ed-clear" class="btn small">Clear</button>
+        <button id="ed-del" class="btn small">Delete</button>
+        <button id="ed-save" class="btn">Save</button>
+        <button id="ed-test" class="btn primary">Test Play</button>
+      </div>
+      <div class="label">My maps</div>
+      <div id="ed-list" class="chips maps"></div>
     </section>
 
     <!-- Pause -->
@@ -180,6 +212,7 @@
   <script src="/js/input.js"></script>
   <script src="/js/render.js"></script>
   <script src="/js/net.js"></script>
+  <script src="/js/editor.js"></script>
   <script src="/js/main.js"></script>
 </body>
 
