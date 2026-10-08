@@ -137,7 +137,7 @@ kbd { font-family: var(--font); display: inline-block; min-width: 24px; text-ali
 .touch.online .zone { flex: 1; pointer-events: auto; position: relative; touch-action: none; }
 /* single player on a phone: Astro Party corner triangles (whole half of the screen is the hit area) */
 .touch.online .tri {
-  position: absolute; bottom: 0; width: min(40vmin, 300px); height: min(40vmin, 300px); pointer-events: none;
+  position: absolute; bottom: 0; width: min(48vmin, 360px); height: min(48vmin, 360px); pointer-events: none;
   background: color-mix(in srgb, var(--c) 26%, transparent); transition: background .06s;
 }
 .touch.online .left .tri { left: 0; clip-path: polygon(0 0, 0 100%, 100% 100%); }
@@ -245,7 +245,7 @@ select { font: inherit; font-family: var(--font); font-size: 10px; color: var(--
 .chip.tool .sw { width: 12px; height: 12px; display: inline-block; border: 1px solid rgba(255,255,255,.4); }
 
 /* ---------------------------------------------------------------- local corner controls (Astro Party style) */
-.touch.local .corner { position: absolute; width: min(36vmin, 280px); height: min(36vmin, 280px); pointer-events: none; }
+.touch.local .corner { position: absolute; width: min(44vmin, 340px); height: min(44vmin, 340px); pointer-events: none; }
 .touch.local .corner.c0 { left: 0; bottom: 0; }
 .touch.local .corner.c1 { right: 0; top: 0; transform: rotate(180deg); }
 .touch.local .corner.c2 { right: 0; bottom: 0; transform: rotate(-90deg); }
