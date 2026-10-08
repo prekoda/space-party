@@ -94,13 +94,17 @@ const Input = {
   },
 
   // Online: left half of the screen rotates, right half fires.
+  // One player on a phone (online or vs bots): Astro Party-style corner triangles —
+  // rotate bottom-left, fire bottom-right. Each whole screen half is the touch area,
+  // so the buttons are easy to hit without looking.
   buildTouchOnline(root, ctrl, color) {
     root.innerHTML = '';
     root.className = 'touch online';
+    root.style.setProperty('--c', color);
     const mk = (cls, label) => {
       const z = document.createElement('div');
       z.className = 'zone ' + cls;
-      z.innerHTML = `<div class="pad" style="--c:${color}"><span>${label}</span></div>`;
+      z.innerHTML = `<div class="tri"><span>${label}</span></div>`;
       root.appendChild(z);
       return z;
     };

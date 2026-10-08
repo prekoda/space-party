@@ -11,7 +11,7 @@
   const TICK_MS = 1000 / 60;
 
   const C = {
-    SHIP_R: 22, PILOT_R: 14, SHIP_HIT: 24, PILOT_HIT: 17, BLADE_OFF: 40, BLADE_R: 15,
+    SHIP_R: 22, PILOT_R: 14, SHIP_HIT: 24, PILOT_HIT: 17, PILOT_REACH: 22, BLADE_OFF: 40, BLADE_R: 15,
     // Ships steer toward where they point ("grip") and carry momentum through turns.
     SPEED: 4.2, GRIP: 0.075, TURN: 0.095,
     // Pilots: rotate spins on the spot; HOLD fire to jet forward; TAP fire to punch.
@@ -929,8 +929,10 @@
           const b = ss[j]; if (b.mode === 'd' || a.mode === 'd') continue;
           const ra = a.mode === 'p' ? C.PILOT_R : C.SHIP_R, rb = b.mode === 'p' ? C.PILOT_R : C.SHIP_R;
           let dx = b.x - a.x, dy = b.y - a.y; const d = Math.hypot(dx, dy) || 1;
-          if (d >= ra + rb) continue;
-          // Ships run over pilots
+          // A ship touching any visible part of a pilot (head to boots) runs them over.
+          const shipVsPilot = (a.mode === 's') !== (b.mode === 's');
+          if (d >= (shipVsPilot ? C.SHIP_R + C.PILOT_REACH : ra + rb)) continue;
+          // Ships run over pilots — only a punch at the right moment deflects the ship
           const ram = (ship, pilot) => {
             if (pilot.meleeT > 0) { // parried: knock the ship away
               const ang = Math.atan2(ship.y - pilot.y, ship.x - pilot.x);
@@ -938,11 +940,14 @@
               this.ev({ e: 'clang', x: r1((ship.x + pilot.x) / 2), y: r1((ship.y + pilot.y) / 2) });
               return true;
             }
-            if (pilot.invuln <= 0 && pilot.frozen <= 0) { this.eliminate(pilot, ship.id); return true; }
-            return false;
+            if (pilot.invuln > 0) return false;
+            if (pilot.frozen > 0) this.ev({ e: 'shatter', x: r1(pilot.x), y: r1(pilot.y), c: pilot.color });
+            this.eliminate(pilot, ship.id);
+            return true;
           };
           if (a.mode === 's' && b.mode === 'p' && ram(a, b)) continue;
           if (b.mode === 's' && a.mode === 'p' && ram(b, a)) continue;
+          if (d >= ra + rb) continue;
           dx /= d; dy /= d;
           const pen = (ra + rb - d) / 2;
           a.x -= dx * pen; a.y -= dy * pen; b.x += dx * pen; b.y += dy * pen;

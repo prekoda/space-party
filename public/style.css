@@ -135,14 +135,18 @@ kbd { font-family: var(--font); display: inline-block; min-width: 24px; text-ali
 #touch { position: fixed; inset: 0; z-index: 4; pointer-events: none; }
 .touch.online { display: flex; }
 .touch.online .zone { flex: 1; pointer-events: auto; position: relative; touch-action: none; }
-.touch.online .pad {
-  position: absolute; bottom: max(22px, env(safe-area-inset-bottom)); width: 96px; height: 96px; border-radius: 50%;
-  border: 2.5px solid color-mix(in srgb, var(--c) 70%, transparent); background: color-mix(in srgb, var(--c) 12%, transparent);
-  display: grid; place-items: center; color: #fff; opacity: .55; transition: transform .06s, opacity .1s;
+/* single player on a phone: Astro Party corner triangles (whole half of the screen is the hit area) */
+.touch.online .tri {
+  position: absolute; bottom: 0; width: min(40vmin, 300px); height: min(40vmin, 300px); pointer-events: none;
+  background: color-mix(in srgb, var(--c) 26%, transparent); transition: background .06s;
 }
-.touch.online .left .pad { left: max(24px, env(safe-area-inset-left)); }
-.touch.online .right .pad { right: max(24px, env(safe-area-inset-right)); }
-.touch.online .zone.down .pad { transform: scale(.9); opacity: .95; background: color-mix(in srgb, var(--c) 35%, transparent); }
+.touch.online .left .tri { left: 0; clip-path: polygon(0 0, 0 100%, 100% 100%); }
+.touch.online .right .tri { right: 0; clip-path: polygon(100% 0, 100% 100%, 0 100%); background: color-mix(in srgb, var(--c) 36%, transparent); }
+.touch.online .zone.down .tri { background: color-mix(in srgb, var(--c) 62%, transparent); }
+.touch.online .tri span { position: absolute; bottom: 16%; color: #fff; opacity: .9; filter: drop-shadow(2px 2px 0 #000); }
+.touch.online .left .tri span { left: 16%; }
+.touch.online .right .tri span { right: 16%; }
+.touch.online .tri svg { width: 34px; height: 34px; }
 
 .touch.local .pair { position: absolute; display: flex; gap: 14px; pointer-events: none; }
 .touch.local .btn {
@@ -176,7 +180,7 @@ kbd { font-family: var(--font); display: inline-block; min-width: 24px; text-ali
   .players { grid-template-columns: 1fr 1fr 1fr; }
   .players li { min-height: 40px; padding: 5px 8px; }
   .chip.map .thumb { width: 72px; height: 45px; }
-  .touch.online .pad { width: 80px; height: 80px; }
+
   .touch.local .btn { width: 58px; height: 58px; }
 }
 @media (max-width: 560px) {
