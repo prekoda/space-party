@@ -362,7 +362,7 @@ class Renderer {
         this.explosion(e.x, e.y, col, true);
         for (let i = 0; i < 6; i++) { const a = Math.random() * SP.TAU, s = 1 + Math.random() * 2.5; this.add({ k: 'shard', x: e.x, y: e.y, vx: Math.cos(a) * s, vy: Math.sin(a) * s, life: 1.3, max: 1.3, c: i % 2 ? '#ffffff' : col, size: 2 }); }
         this.ring(e.x, e.y, '#ffffff', 8, 70, 0.3);
-        this.bump(mine ? 26 : 16); this.zoomPunch(0.07);
+        this.zoomPunch(0.07); // no screen shake when a ship is knocked out
         this.snd('kill');
         if (mine && !this.silent && navigator.vibrate) navigator.vibrate(120);
         break;
@@ -390,12 +390,10 @@ class Renderer {
         break;
       }
       case 'hit': {
-        // impact: white star flash at the contact point, sparks thrown along the bullet's path, camera recoil
+        // impact: white star flash at the contact point, sparks thrown along the bullet's path (no screen shake)
         this.add({ k: 'impact', x: e.x, y: e.y, life: 0.12, max: 0.12 });
         for (let i = 0; i < 10; i++) { const a = e.a + (Math.random() - 0.5) * 1.4, sp = 2 + Math.random() * 5; this.add({ k: 'px', x: e.x, y: e.y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, life: 0.3, max: 0.3, c: i % 2 ? '#ffffff' : (e.c || '#ffd23f'), size: 1 }); }
         this.ring(e.x, e.y, '#ffffff', 4, 30, 0.15);
-        this.kick(e.a, mine ? 10 : 5);
-        this.bump(mine ? 10 : 5);
         break;
       }
       case 'block': this.burst(e.x, e.y, '#a5a5b8', 12, 3, 0.7, 2); this.burst(e.x, e.y, '#55556a', 8, 2, 0.6); this.snd('block'); break;
