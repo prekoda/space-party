@@ -47,7 +47,10 @@ class OnlineSession {
     return this.blockCache.arr;
   }
   worldOf(snap) {
-    return { map: SP.MAP_BY_ID[snap.map], blocks: this.blocksOf(snap), asteroids: snap.as, tick: snap.t, canMove: snap.ph !== 'countdown', sim: false };
+    const me = snap.sh.find(s => s.id === this.me);
+    const solids = snap.cr.map(c => ({ x: c.x, y: c.y, r: SP.C.CRATE_R }));
+    if (me) for (const o of snap.sh) if (o.id !== this.me && o.m === me.m && o.m !== 'd') solids.push({ x: o.x, y: o.y, r: o.m === 's' ? SP.C.SHIP_R : SP.C.PILOT_R });
+    return { map: SP.MAP_BY_ID[snap.map], blocks: this.blocksOf(snap), asteroids: snap.as, solids, tick: snap.t, canMove: snap.ph !== 'countdown', sim: false };
   }
 
   onSnap(s) {
@@ -115,7 +118,7 @@ class OnlineSession {
         this.fireBuf = 0;
         this.localCd = SP.C.FIRE_CD;
         if (me.pw) {
-          if (me.pw !== 'laser' && me.pw !== 'mine') { this.localShot(me.pw); entry.recoil = SP.C.RECOIL * 1.5; }
+          if (me.pw !== 'laser' && me.pw !== 'mine' && me.pw !== 'joust') { this.localShot(me.pw); entry.recoil = SP.C.RECOIL * 1.5; }
         } else if (me.am - this.shotSeqs.length > 0) { this.localShot(null); entry.recoil = SP.C.RECOIL; }
         else Sfx.play('dry');
         if (entry.recoil) { recoil(this.pred, entry.recoil); this.shotSeqs.push(entry.seq); }

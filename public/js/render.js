@@ -112,6 +112,14 @@ const SHIP_ROWS = [
   '.OWWWO.OWWWO.',
   '.OEEEO.OEEEO.',
 ];
+// Pilot's knife, pointing right from the hand: brown grip, silver guard, white blade.
+const KNIFE_ROWS = [
+  '...G.........',
+  'HHHGSSSSSSSW.',
+  'HHHGsssssssSW',
+  '...G.........',
+];
+const SLASH_TIME = 0.2;
 const CROWN_ROWS = [
   'Y..Y..Y',
   'YY.Y.YY',
@@ -126,14 +134,23 @@ const BULLET_ROWS = [
   'oWWWWccc',
   '.oWWWcc.',
 ];
+// Astronaut, head up (rotated so the head points where the pilot faces):
+// white helmet with dark visor, suit in the player's colour, arms, legs, white boots.
 const PILOT_ROWS = [
-  '..WWWW..',
-  '.WWWWWW.',
-  'WWKKWWWC',
-  'WWKKWWWC',
-  'WWWWWWWC',
-  '.WWWWWW.',
-  '.WW..WW.',
+  '...OOO...',
+  '..OWWWO..',
+  '.OWKKKWO.',
+  '.OWKHKWO.',
+  '.OWWWWWO.',
+  '..OOWOO..',
+  'OOCCCCCOO',
+  'OWOCCCOWO',
+  'OWOCCCOWO',
+  'OO.CCC.OO',
+  '..OCOCO..',
+  '..OCOCO..',
+  '..OWOWO..',
+  '..OOOOO..',
 ];
 const CRATE_ROWS = [
   '.LLLLLLLLL.',
@@ -228,7 +245,7 @@ class Renderer {
     return this.get('ship' + color, () => sprite(SHIP_ROWS, { W: '#ffffff', C: color, D: shade(color, -0.35), E: '#ff7a1a', O: '#14142a' }));
   }
   pilotSprite(color) {
-    return this.get('pilot' + color, () => sprite(PILOT_ROWS, { W: '#ffffff', C: color, K: '#14142a' }));
+    return this.get('pilot' + color, () => sprite(PILOT_ROWS, { W: '#ffffff', C: color, K: '#14142a', H: '#7fe9ff', O: '#14142a' }));
   }
   itemSprite(type) {
     return this.get('item' + type, () => {
@@ -292,6 +309,8 @@ class Renderer {
   ring(x, y, color, r0, r1, life) { this.add({ k: 'ring', x, y, r0, r1, life, max: life, c: color }); }
   text(x, y, str, color, size = 12, life = 1.1) { this.add({ k: 'text', x, y, vx: 0, vy: -0.6, life, max: life, c: color, s: str, size }); }
   bump(amount) { if (!this.silent) this.shake = Math.max(this.shake, amount); }
+  // directional camera kick (recoils away from an impact)
+  kick(a, amount) { if (this.silent) return; this.kickX = (this.kickX || 0) + Math.cos(a) * amount; this.kickY = (this.kickY || 0) + Math.sin(a) * amount; }
   zoomPunch(amount) { if (!this.silent) this.punch = Math.max(this.punch, amount); }
   snd(name) { if (!this.silent) Sfx.play(name); }
   explosion(x, y, color, big) {
@@ -323,7 +342,8 @@ class Renderer {
       case 'use': {
         const P = SP.POWERS[e.t];
         if (ship && P) this.text(ship.x, ship.y - 44, P.name + '!', P.color, 12, 0.9);
-        if (e.t !== 'laser' && e.t !== 'mine') this.snd('activate');
+        if (e.t === 'joust') this.snd('joustOn');
+        else if (e.t !== 'laser' && e.t !== 'mine') this.snd('activate');
         break;
       }
       case 'wall':
@@ -331,19 +351,18 @@ class Renderer {
         this.snd('wall');
         if (mine) this.bump(Math.min(6, e.k));
         break;
-      case 'melee': {
-        const a = e.a;
-        for (let i = -3; i <= 3; i++) { const aa = a + i * 0.25; this.add({ k: 'px', x: e.x + Math.cos(aa) * 14, y: e.y + Math.sin(aa) * 14, vx: Math.cos(aa) * 1.5, vy: Math.sin(aa) * 1.5, life: 0.18, max: 0.18, c: '#ffffff', size: 1 }); }
+      case 'melee':
+        // knife swing: animated in drawSlashes, follows the pilot
+        (this.slashes = this.slashes || []).push({ id: e.id, a: e.a, t: this.time, x: e.x, y: e.y, side: (this.slashSide = -(this.slashSide || 1)) });
         this.snd('punch');
         break;
-      }
       case 'kill':
         this.feed(e.by, e.id, fr, false);
         this.killCam(e.x, e.y, 0.35);
         this.explosion(e.x, e.y, col, true);
         for (let i = 0; i < 6; i++) { const a = Math.random() * SP.TAU, s = 1 + Math.random() * 2.5; this.add({ k: 'shard', x: e.x, y: e.y, vx: Math.cos(a) * s, vy: Math.sin(a) * s, life: 1.3, max: 1.3, c: i % 2 ? '#ffffff' : col, size: 2 }); }
         this.ring(e.x, e.y, '#ffffff', 8, 70, 0.3);
-        this.bump(mine ? 16 : 9); this.zoomPunch(0.06);
+        this.bump(mine ? 26 : 16); this.zoomPunch(0.07);
         this.snd('kill');
         if (mine && !this.silent && navigator.vibrate) navigator.vibrate(120);
         break;
@@ -354,16 +373,31 @@ class Renderer {
         this.burst(e.x, e.y, '#ff4766', 10, 3, 0.6);
         this.ring(e.x, e.y, col, 4, 45, 0.3);
         this.text(e.x, e.y - 22, 'X', col, 14);
-        this.bump(6); this.zoomPunch(0.04);
+        this.bump(mine ? 18 : 10); this.zoomPunch(0.04);
         this.snd('elim');
         if (mine && !this.silent && navigator.vibrate) navigator.vibrate([60, 40, 160]);
         break;
-      case 'boom':
+      case 'boom': {
+        const big = e.s === 'mine';
+        this.add({ k: 'fireball', x: e.x, y: e.y, R: e.r * (big ? 1 : 0.85), life: big ? 0.55 : 0.4, max: big ? 0.55 : 0.4 });
+        this.add({ k: 'shock', x: e.x, y: e.y, r0: 6, r1: e.r * 1.5, life: 0.28, max: 0.28 });
+        this.add({ k: 'scorch', x: e.x, y: e.y, R: e.r * 0.55, life: 4, max: 4 });
         this.explosion(e.x, e.y, '#ff6a1f', true);
-        this.ring(e.x, e.y, '#ffd23f', 10, e.r, 0.3);
-        this.bump(14); this.zoomPunch(0.05);
+        for (let i = 0; i < (big ? 10 : 6); i++) { const a = Math.random() * SP.TAU, sp = 2 + Math.random() * 4; this.add({ k: 'shard', x: e.x, y: e.y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, life: 0.9, max: 0.9, c: i % 3 ? '#5a5a70' : '#ffd23f', size: 2 }); }
+        for (let i = 0; i < (big ? 10 : 6); i++) this.add({ k: 'smoke', x: e.x + (Math.random() - 0.5) * e.r, y: e.y + (Math.random() - 0.5) * e.r, vx: (Math.random() - 0.5) * 0.8, vy: -0.4 - Math.random() * 0.8, life: 1.6, max: 1.6, size: 3 + (Math.random() * 3 | 0) });
+        this.bump(big ? 30 : 20); this.zoomPunch(big ? 0.1 : 0.06);
         this.snd('boom');
         break;
+      }
+      case 'hit': {
+        // impact: white star flash at the contact point, sparks thrown along the bullet's path, camera recoil
+        this.add({ k: 'impact', x: e.x, y: e.y, life: 0.12, max: 0.12 });
+        for (let i = 0; i < 10; i++) { const a = e.a + (Math.random() - 0.5) * 1.4, sp = 2 + Math.random() * 5; this.add({ k: 'px', x: e.x, y: e.y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, life: 0.3, max: 0.3, c: i % 2 ? '#ffffff' : (e.c || '#ffd23f'), size: 1 }); }
+        this.ring(e.x, e.y, '#ffffff', 4, 30, 0.15);
+        this.kick(e.a, mine ? 10 : 5);
+        this.bump(mine ? 10 : 5);
+        break;
+      }
       case 'block': this.burst(e.x, e.y, '#a5a5b8', 12, 3, 0.7, 2); this.burst(e.x, e.y, '#55556a', 8, 2, 0.6); this.snd('block'); break;
       case 'rock': this.burst(e.x, e.y, '#9aa0bc', 10 + (e.r / 3 | 0), 3, 0.8, 2); this.snd('block'); break;
       case 'crate': if (e.t && SP.POWERS[e.t]) this.text(e.x, e.y - 28, SP.POWERS[e.t].name, SP.POWERS[e.t].color, 10, 0.8);
@@ -374,7 +408,6 @@ class Renderer {
         this.ring(e.x, e.y, P.color, 8, 42, 0.3);
         this.burst(e.x, e.y, P.color, 12, 3, 0.4);
         if (e.t === 'shield') { this.text(e.x, e.y - 30, 'SHIELD UP!', P.color, 12); this.snd('shieldOn'); }
-        else if (e.t === 'joust') { this.text(e.x, e.y - 30, 'JOUSTER!', P.color, 12); this.snd('joustOn'); }
         else if (e.t !== 'reverse') { this.text(e.x, e.y - 30, P.name, P.color, 10); this.snd('pick'); }
         break;
       }
@@ -403,6 +436,7 @@ class Renderer {
       case 'shatter': this.burst(e.x, e.y, '#bff6ff', 26, 5, 0.8, 2); this.bump(8); this.snd('shatter'); break;
       case 'shieldPop': this.ring(e.x, e.y, '#3fa9ff', 20, 55, 0.3); this.burst(e.x, e.y, '#9fd4ff', 14, 4, 0.4); this.snd('shield'); break;
       case 'clang': this.burst(e.x, e.y, '#ffffff', 8, 4, 0.2); this.snd('clang'); break;
+      case 'bladeBreak': this.burst(e.x, e.y, '#4dff88', 14, 4, 0.5, 2); this.burst(e.x, e.y, '#ffffff', 6, 3, 0.3); this.snd('shatter'); this.text(e.x, e.y - 20, 'BLADE BROKEN', '#4dff88', 8, 0.7); break;
       case 'beep': this.snd('beep'); break;
       case 'drop': this.snd('drop'); break;
       case 'dash':
@@ -414,7 +448,7 @@ class Renderer {
       case 'respawn': this.ring(e.x, e.y, col, 50, 8, 0.4); this.burst(e.x, e.y, '#ffffff', 10, 3, 0.4); this.snd('respawn'); break;
       case 'sizzle': this.burst(e.x, e.y, '#ffb347', 5, 2, 0.3); this.snd('sizzle'); break;
       case 'go': this.snd('go'); break;
-      case 'round': this.trails.clear(); this.banner = null; this.feedList = []; this.kc = null; break;
+      case 'round': this.trails.clear(); this.banner = null; this.feedList = []; this.kc = null; this.slashes = []; break;
       case 'sudden': this.suddenAt = this.time; this.snd('sudden'); break;
       case 'roundWin': this.snd(e.id ? 'roundWin' : 'lose'); break;
       case 'point': {
@@ -449,11 +483,7 @@ class Renderer {
     this.kc = { t: this.time, x, y, dur };
   }
   // Time scale requested by the kill cam (used by local play to slow the simulation).
-  timeScale() {
-    if (!this.kc) return 1;
-    const k = (this.time - this.kc.t) / this.kc.dur;
-    return k >= 1 ? 1 : 0.3 + 0.7 * k * k;
-  }
+  timeScale() { return 1; } // kill cam is visual only — never slow the game down
   drawFeed(g) {
     if (!this.feedList || !this.feedList.length) return;
     let y = this.oy + 18;
@@ -474,7 +504,7 @@ class Renderer {
     if (!this.kc) return;
     const age = this.time - this.kc.t, life = this.kc.dur + 0.35;
     if (age > life) { this.kc = null; return; }
-    const a = Math.min(1, (life - age) * 3) * 0.13, vw = SP.W * this.scale, vh = SP.H * this.scale;
+    const a = Math.min(1, (life - age) * 3) * 0.08, vw = SP.W * this.scale, vh = SP.H * this.scale;
     g.save();
     g.beginPath(); g.rect(this.ox, this.oy, vw, vh); g.clip();
     g.globalAlpha = a; g.fillStyle = '#ffffff';
@@ -509,7 +539,6 @@ class Renderer {
         tx = (x0 + x1) / 2; ty = (y0 + y1) / 2;
       }
     }
-    if (this.kc && this.time - this.kc.t < this.kc.dur) { tx += (this.kc.x - tx) * 0.5; ty += (this.kc.y - ty) * 0.5; tz = Math.min(2.1, tz * 1.25); }
     const kz = 1 - Math.exp(-dt * (tz < cam.z ? 5 : 1.6));
     const kp = 1 - Math.exp(-dt * 3.5);
     cam.z += (tz - cam.z) * kz;
@@ -532,8 +561,9 @@ class Renderer {
     g.fillStyle = '#000000'; g.fillRect(0, 0, this.cv.width, this.cv.height);
     if (!fr) return;
     this.updateCamera(fr, dt);
-    this.shake *= Math.pow(0.002, dt);
-    if (this.shake < 0.3) this.shake = 0;
+    this.shake *= Math.pow(0.006, dt);
+    if (this.shake < 0.4) this.shake = 0;
+    this.kickX *= Math.pow(0.0004, dt); this.kickY *= Math.pow(0.0004, dt);
 
     // 1) world into the low-res buffer
     const b = this.b;
@@ -541,6 +571,7 @@ class Renderer {
     b.globalAlpha = 1;
     b.drawImage(this.layer(fr.map), 0, 0);
     this.drawMap(b, fr);
+    this.drawScorches(b);
     this.drawShrink(b, fr, this.time);
     this.drawPickups(b, fr);
     this.updateTrails(fr);
@@ -549,12 +580,13 @@ class Renderer {
     for (const s of fr.sh) if (s.m !== 'd') this.drawBeam(b, s);
     for (const s of fr.sh) if (s.m === 'p') this.drawPilot(b, s, fr);
     for (const s of fr.sh) if (s.m === 's') this.drawShip(b, s);
+    this.drawSlashes(b, fr);
     this.drawCrown(b, fr);
     this.stepParticles(b, dt);
 
     // 2) scale the visible part of the buffer up to the screen with hard pixel edges
     const v = this.view;
-    const shx = (Math.random() - 0.5) * this.shake, shy = (Math.random() - 0.5) * this.shake;
+    const shx = (Math.random() - 0.5) * this.shake + (this.kickX || 0), shy = (Math.random() - 0.5) * this.shake + (this.kickY || 0);
     const srcW = 2 * v.hw / PX, srcH = 2 * v.hh / PX;
     const srcX = Math.max(0, Math.min(BW - srcW, (v.x - v.hw + shx) / PX)), srcY = Math.max(0, Math.min(BH - srcH, (v.y - v.hh + shy) / PX));
     g.imageSmoothingEnabled = false;
@@ -815,8 +847,9 @@ class Renderer {
       }
       if (hot && Math.random() < 0.6) this.add({ k: 'px', x: s.x - Math.cos(s.a) * 30 + (Math.random() - 0.5) * 8, y: s.y - Math.sin(s.a) * 30 + (Math.random() - 0.5) * 8, vx: -Math.cos(s.a) * 1.5, vy: -Math.sin(s.a) * 1.5, life: 0.35, max: 0.35, c: Math.random() < 0.5 ? '#ff6a1f' : '#ffd23f', size: 1 });
     }
-    if (s.jo > 0 && !(s.jo < 120 && Math.floor(t * 10) % 2)) {
-      for (const sx of [-12, 9]) {
+    if (s.jo > 0) {
+      for (const sx of [s.jo & 2 ? -12 : null, s.jo & 1 ? 9 : null]) {
+        if (sx === null) continue;
         b.fillStyle = '#0b3a1a'; b.fillRect(sx - 1, -6, 5, 12);
         b.fillStyle = '#4dff88'; b.fillRect(sx, -5, 3, 10);
         b.fillStyle = '#0b3a1a'; b.fillRect(sx, -2, 3, 1); b.fillRect(sx, 1, 3, 1);
@@ -829,6 +862,7 @@ class Renderer {
     }
     b.restore();
     if (s.sd) { b.fillStyle = (Math.floor(t * 6) % 3) ? '#3fa9ff' : '#9fd4ff'; this.pring(b, x, y, 9); }
+    if (s.iv > 0) { b.globalAlpha = 1; b.fillStyle = Math.floor(t * 12) % 2 ? '#ffffff' : '#9fc4ff'; this.pring(b, x, y, 10, 2); }
     if (s.pw) {
       const P = SP.POWERS[s.pw], a = t * 3, px = Math.round(x + Math.cos(a) * 11), py = Math.round(y + Math.sin(a) * 11);
       b.fillStyle = P.color; b.fillRect(px - 1, py - 1, 3, 3);
@@ -846,6 +880,55 @@ class Renderer {
     b.fillStyle = '#0b3a44'; b.fillRect(cx - 2, cy - 2, 4, 4);
     b.fillStyle = '#2ee6f0'; b.fillRect(cx - 1, cy - 1, 3, 3);
     b.fillStyle = '#ffffff'; b.fillRect(cx - 1, cy - 1, 1, 1);
+  }
+
+  // Knife slash: the blade sweeps across the pilot's front in a fast arc, leaving a white trail,
+  // then a small spark burst at the tip.
+  drawSlashes(b, fr) {
+    if (!this.slashes || !this.slashes.length) return;
+    const knife = this.get('knife', () => sprite(KNIFE_ROWS, { H: '#8a5a2b', G: '#c9cce0', S: '#ffffff', s: '#aeb6d4', W: '#ffffff' }));
+    this.slashes = this.slashes.filter(sl => this.time - sl.t < SLASH_TIME + 0.12);
+    for (const sl of this.slashes) {
+      const p = fr.sh.find(q => q.id === sl.id && q.m === 'p');
+      const cx = Math.round((p ? p.x : sl.x) / PX), cy = Math.round((p ? p.y : sl.y) / PX);
+      const age = this.time - sl.t, k = Math.min(1, age / SLASH_TIME), e = 1 - Math.pow(1 - k, 3);
+      const from = sl.a - 1.4 * sl.side, to = sl.a + 1.4 * sl.side, ang = from + (to - from) * e;
+      // trail along the swept arc
+      const steps = 48;
+      for (let i = 0; i <= steps; i++) {
+        const u = i / steps; if (u > e) break;
+        const aa = from + (to - from) * u, fade = (1 - (e - u) * 2.2) * (age < SLASH_TIME ? 1 : 1 - (age - SLASH_TIME) / 0.12);
+        if (fade <= 0) continue;
+        b.globalAlpha = fade;
+        b.fillStyle = u > e - 0.15 ? '#ffffff' : '#c9e8ff';
+        // crescent: thick near the blade, thinning toward the start of the swing
+        const th = 1 + Math.round(4 * u);
+        for (let rr = 14 - th; rr <= 14; rr++) b.fillRect(Math.round(cx + Math.cos(aa) * rr), Math.round(cy + Math.sin(aa) * rr), 1, 1);
+      }
+      b.globalAlpha = 1;
+      if (age < SLASH_TIME) {
+        b.save(); b.translate(cx, cy); b.rotate(ang);
+        b.drawImage(knife, 2, -2);
+        b.restore();
+      } else if (!sl.sparked) {
+        sl.sparked = true;
+        this.burst((p ? p.x : sl.x) + Math.cos(to) * 52, (p ? p.y : sl.y) + Math.sin(to) * 52, '#ffffff', 7, 3, 0.25);
+      }
+    }
+  }
+
+  // Scorch marks left by explosions, drawn on the ground under everything else.
+  drawScorches(b) {
+    for (const p of this.parts) {
+      if (p.k !== 'scorch') continue;
+      const k = p.life / p.max, x = Math.round(p.x / PX), y = Math.round(p.y / PX), R = Math.round(p.R / PX);
+      b.globalAlpha = Math.min(0.55, k * 0.8); b.fillStyle = '#000000';
+      for (let yy = -R; yy <= R; yy++) for (let xx = -R; xx <= R; xx++) {
+        const d = Math.sqrt(xx * xx + yy * yy) / R;
+        if (d <= 1 && !(d > 0.7 && ((xx * 3 + yy * 7) & 3))) b.fillRect(x + xx, y + yy, 1, 1);
+      }
+    }
+    b.globalAlpha = 1;
   }
 
   drawCrown(b, fr) {
@@ -870,20 +953,18 @@ class Renderer {
         b.fillRect(Math.round(x + Math.cos(a) * 8), Math.round(y + Math.sin(a) * 8), 1, 1);
       }
     }
-    // Upright astronaut (tiny sprites turn to mush when rotated); jetpack puffs opposite the heading.
-    const ca = Math.cos(s.a), sa = Math.sin(s.a), bob = Math.sin(t * 6 + x) > 0 ? -1 : 0;
-    if (s.fr <= 0 && (s.ho > SP.C.TAP_TICKS || s.dt > 0)) {
+    // Head points where the pilot faces; jet fire comes out of the feet while moving.
+    if (s.mt > 0) { b.fillStyle = '#ffffff'; b.globalAlpha = s.mt / SP.C.MELEE_GUARD; this.pring(b, x, y, 9); b.globalAlpha = 1; }
+    const spr = this.pilotSprite(s.c);
+    b.save(); b.translate(x, y); b.rotate(s.a + Math.PI / 2);
+    if (s.fr <= 0 && (s.ho > 0 || s.dt > 0)) {
       const len = 2 + (Math.random() * 2 | 0) + (s.dt > 0 ? 3 : 0);
-      for (let i = 1; i <= len; i++) {
-        b.fillStyle = i === 1 ? '#ffffff' : i < 3 ? '#ffd23f' : '#ff6a1f';
-        b.fillRect(Math.round(x - ca * (3 + i)), Math.round(y + 1 - sa * (3 + i)), 1, 1);
+      for (let i = 0; i < len; i++) {
+        b.fillStyle = i === 0 ? '#ffffff' : i < 2 ? '#ffd23f' : '#ff6a1f';
+        b.fillRect(-2, 7 + i, 1, 1); b.fillRect(1, 7 + i, 1, 1);
       }
     }
-    if (s.mt > 0) { b.fillStyle = '#ffffff'; b.globalAlpha = s.mt / SP.C.MELEE_GUARD; this.pring(b, x, y, 6); b.globalAlpha = 1; }
-    const spr = this.pilotSprite(s.c);
-    b.save(); b.translate(x, y + bob);
-    if (ca < -0.2) b.scale(-1, 1);
-    b.drawImage(spr, -4, -4);
+    b.drawImage(spr, -4.5, -7);
     b.restore();
     if (s.fr > 0) { b.fillStyle = 'rgba(170,240,255,0.65)'; b.fillRect(x - 5, y - 6, 10, 12); }
     b.globalAlpha = 1;
@@ -898,7 +979,7 @@ class Renderer {
       p.life -= dt;
       if (p.life <= 0) continue;
       parts[write++] = p;
-      if (p.screen || p.k === 'text') continue; // drawn on the overlay pass
+      if (p.screen || p.k === 'text' || p.k === 'scorch') continue; // drawn in other passes
       if (p.k !== 'ring' && p.k !== 'flash') {
         p.x += p.vx * k60; p.y += p.vy * k60;
         const drag = Math.pow(p.k === 'smoke' ? 0.95 : 0.92, k60);
@@ -918,6 +999,33 @@ class Renderer {
           b.globalAlpha = k; b.fillStyle = p.c;
           this.pring(b, x, y, Math.max(1, Math.round((p.r1 + (p.r0 - p.r1) * k) / PX)));
           break;
+        case 'fireball': {
+          // grows fast, then cools from white → yellow → orange → red → dark, with a dithered edge
+          const grow = 1 - Math.pow(k, 3), R = Math.max(2, Math.round(p.R / PX * (0.35 + 0.65 * grow)));
+          const cols = k > 0.75 ? ['#ffffff', '#fff3b0', '#ffd23f'] : k > 0.45 ? ['#fff3b0', '#ffd23f', '#ff7a1a'] : k > 0.2 ? ['#ffd23f', '#ff6a1f', '#c2410c'] : ['#ff6a1f', '#7a1f0a', '#3a1a14'];
+          b.globalAlpha = Math.min(1, k * 3);
+          for (let yy = -R; yy <= R; yy++) for (let xx = -R; xx <= R; xx++) {
+            const d = Math.sqrt(xx * xx + yy * yy) / R;
+            if (d > 1) continue;
+            if (d > 0.82 && ((xx + yy) & 1)) continue;
+            b.fillStyle = d < 0.4 ? cols[0] : d < 0.72 ? cols[1] : cols[2];
+            b.fillRect(x + xx, y + yy, 1, 1);
+          }
+          break;
+        }
+        case 'shock':
+          b.globalAlpha = k; b.fillStyle = '#ffffff';
+          this.pring(b, x, y, Math.max(1, Math.round((p.r1 + (p.r0 - p.r1) * k) / PX)));
+          this.pring(b, x, y, Math.max(1, Math.round((p.r1 + (p.r0 - p.r1) * k) / PX) - 1), 2);
+          break;
+        case 'impact': {
+          b.globalAlpha = 1; b.fillStyle = '#ffffff';
+          const L = Math.round(3 + (1 - k) * 4);
+          b.fillRect(x - L, y, L * 2 + 1, 1); b.fillRect(x, y - L, 1, L * 2 + 1);
+          b.fillRect(x - 1, y - 1, 3, 3);
+          b.fillStyle = '#ffd23f'; b.fillRect(x - 2, y - 2, 1, 1); b.fillRect(x + 2, y + 2, 1, 1); b.fillRect(x + 2, y - 2, 1, 1); b.fillRect(x - 2, y + 2, 1, 1);
+          break;
+        }
         case 'flash': {
           b.globalAlpha = Math.min(1, k * 1.5);
           const spr = this.get('flash' + p.r, () => disc(p.r, (dx, dy, dd, r) => dd < r * 0.5 ? '#ffffff' : ((dx + dy) & 1) ? '#fff3b0' : null));

@@ -11,13 +11,13 @@
   const TICK_MS = 1000 / 60;
 
   const C = {
-    SHIP_R: 18, PILOT_R: 11, SHIP_HIT: 21, PILOT_HIT: 14,
+    SHIP_R: 22, PILOT_R: 14, SHIP_HIT: 24, PILOT_HIT: 17, BLADE_OFF: 40, BLADE_R: 15,
     // Ships steer toward where they point ("grip") and carry momentum through turns.
-    SPEED: 4.1, GRIP: 0.05, TURN: 0.088,
+    SPEED: 4.2, GRIP: 0.075, TURN: 0.095,
     // Pilots: rotate spins on the spot; HOLD fire to jet forward; TAP fire to punch.
     PILOT_ACCEL: 0.17, PILOT_DRAG: 0.93, PILOT_STOP: 0.94, PILOT_TURN: 0.13, TAP_TICKS: 9, MELEE_GUARD: 14,
     // Double-tap = booster: a straight surge with fire, not an instant jump.
-    BOOST_T: 24, BOOST_SPEED: 2.1, BOOST_GRIP: 0.22, BOOST_TURN: 0.35,
+    BOOST_T: 20, BOOST_SPEED: 2.0, BOOST_GRIP: 0.25, BOOST_TURN: 0.75,
     PILOT_DASH: 4.2, DASH_CD: 50, MAX_SPEED: 12,
     MELEE_CD: 30, MELEE_REACH: 18, MELEE_R: 26,
     CRATE_SPEED: 0.7, CRATE_R: 22,
@@ -26,7 +26,7 @@
     AMMO: 3, RELOAD: 50, FIRE_CD: 6, FIRE_BUF: 10, RECOIL: 0.65,
     REVERSE: 600,
     SHRINK_RATE: 0.25, SHRINK_MAX: 400,
-    RESPAWN: 360, RESPAWN_INVULN: 80, EJECT_INVULN: 30,
+    RESPAWN: 360, RESPAWN_INVULN: 50, EJECT_INVULN: 4,
     LASER_CHARGE: 30, LASER_BEAM: 14,
     FREEZE: 150, JOUST: 720,
     MINE_ARM: 36, MINE_FUSE: 22, MINE_TRIGGER: 58, MINE_BLAST: 95,
@@ -49,7 +49,7 @@
     mine:   { name: 'MINES',    color: '#ff4dd8', uses: 2, w: 0.9 },
     freeze: { name: 'FREEZE',   color: '#7fe9ff', uses: 2, w: 0.9 },
     shield: { name: 'SHIELD',   color: '#3fa9ff', instant: true, w: 1.0 },
-    joust:  { name: 'JOUSTER',  color: '#e8e8ff', instant: true, w: 0.8 },
+    joust:  { name: 'JOUSTER',  color: '#e8e8ff', uses: 1, w: 0.8 },
     reverse: { name: 'REVERSE ALL', color: '#c77dff', instant: true, w: 0.6 },
   };
   const POWER_LIST = Object.keys(POWERS);
@@ -361,13 +361,13 @@
           else s.dashT = C.BOOST_T;
         }
         if (pilot) {
-          if (s.hold > C.TAP_TICKS) { s.vx = (s.vx + ca * C.PILOT_ACCEL) * C.PILOT_DRAG; s.vy = (s.vy + sa * C.PILOT_ACCEL) * C.PILOT_DRAG; }
+          if (s.hold > 0) { s.vx = (s.vx + ca * C.PILOT_ACCEL) * C.PILOT_DRAG; s.vy = (s.vy + sa * C.PILOT_ACCEL) * C.PILOT_DRAG; }
           else { s.vx *= C.PILOT_STOP; s.vy *= C.PILOT_STOP; }
         } else {
           let sp = C.SPEED, grip = C.GRIP;
           if (s.dashT > 0) { sp *= C.BOOST_SPEED; grip = C.BOOST_GRIP; }
           if (s.charge > 0 || s.beam > 0) sp *= 0.25;
-          if (s.joust > 0) sp *= 1.15;
+          if (s.joust > 0) sp *= 1.25;
           s.vx += (ca * sp - s.vx) * grip; s.vy += (sa * sp - s.vy) * grip;
         }
       }
@@ -400,6 +400,7 @@
     for (const c of m.bumpers) if (pushCircle(o, r, c, true)) f |= 2;
     for (const sp of m.spinners) if (pushSpinner(o, r, sp, w.tick)) f |= 4;
     if (m.sun && Math.hypot(o.x - m.sun.x, o.y - m.sun.y) < m.sun.r + r - 3) f |= 1;
+    if (w.solids) for (const c of w.solids) if (c !== o && pushCircle(o, r, c, false)) f |= 8;
     for (const a of w.asteroids) {
       let dx = o.x - a.x, dy = o.y - a.y;
       const min = r + a.r, d2 = dx * dx + dy * dy;
@@ -507,7 +508,9 @@
       if (!shootable || s.charge > 0 || s.beam > 0) return inp;
       const clear = g.clearLine(s.x, s.y, aimX, aimY);
       const p = s.power;
-      if (p === 'mine') {
+      if (p === 'joust') {
+        if (t && dist < 320) inp.f = 1;
+      } else if (p === 'mine') {
         if (t && dist < 200 && Math.abs(diff) > 2.2) inp.f = 1;
         else if (Math.random() < 0.004) inp.f = 1;
       } else if (p === 'homing') {
@@ -700,17 +703,19 @@
     }
 
     get canMove() { return this.phase !== 'countdown'; }
+    // Orbs are solid for everything that flies into them.
+    get solids() { return this.crateSolids; }
 
     simStep(inputs, live) {
       this.tick++;
       if (this.sudden && live) this.shrink = Math.min(C.SHRINK_MAX, this.shrink + C.SHRINK_RATE);
       this.updateAsteroids();
+      this.crateSolids = this.crates.map(c => ({ x: c.x, y: c.y, r: C.CRATE_R, ref: c }));
       const world = this;
       for (const s of this.ships) {
         if (s.mode === 'd') continue;
         const inp = inputs[s.id] || NO_INPUT;
         if (s.invuln > 0) s.invuln--;
-        if (s.joust > 0) s.joust--;
         if (s.fireCd > 0) s.fireCd--;
         if (s.mode === 'p' && live && !this.sudden && --s.respawn <= 0) {
           s.mode = 's'; s.invuln = C.RESPAWN_INVULN; s.ammo = C.AMMO; s.reload = 0; s.frozen = 0;
@@ -802,13 +807,14 @@
         else if (p === 'bounce') { this.spawnBullet(s, s.a, 'b'); this.ev({ e: 'shot', id: s.id, k: 'b' }); }
         else if (p === 'homing') { this.spawnBullet(s, s.a, 'm'); this.ev({ e: 'shot', id: s.id, k: 'm' }); }
         else if (p === 'freeze') { this.spawnBullet(s, s.a, 'i'); this.ev({ e: 'shot', id: s.id, k: 'i' }); }
+        else if (p === 'joust') s.joust = 3; // deploy both blades
         else if (p === 'mine') {
           this.mines.push({ id: this.nextId++, x: s.x - ca * 24, y: s.y - sa * 24, owner: s.id, c: s.color, arm: C.MINE_ARM, fuse: 0 });
           this.ev({ e: 'drop', id: s.id });
         }
         s.fireCd = C.FIRE_CD;
         if (--s.uses <= 0) { s.power = null; s.uses = 0; }
-        if (p !== 'mine' && p !== 'laser') { s.vx -= ca * C.RECOIL * 1.5; s.vy -= sa * C.RECOIL * 1.5; }
+        if (p !== 'mine' && p !== 'laser' && p !== 'joust') { s.vx -= ca * C.RECOIL * 1.5; s.vy -= sa * C.RECOIL * 1.5; }
         return;
       }
       if (s.ammo <= 0) { this.ev({ e: 'dry', id: s.id }); return; }
@@ -840,7 +846,7 @@
         for (const o of this.ships) {
           if (o === s || o.mode === 'd' || s.beamHits.has(o.id)) continue;
           const r = (o.mode === 'p' ? C.PILOT_R : C.SHIP_R) + 6;
-          if (Math.hypot(o.x - x, o.y - y) < r) { s.beamHits.add(o.id); this.hitShip(o, s.id, 'laser'); }
+          if (Math.hypot(o.x - x, o.y - y) < r && o.invuln <= 0) { s.beamHits.add(o.id); this.laserKill(o, s.id); }
         }
       }
       this.crates = this.crates.filter(c => !c.dead);
@@ -849,6 +855,11 @@
     }
 
     // ---- damage
+    laserKill(o, by) {
+      if (o.mode === 's') this.ev({ e: 'kill', id: o.id, by, x: r1(o.x), y: r1(o.y), c: o.color, a: r3(o.a) });
+      o.shield = 0; o.joust = 0; o.frozen = 0;
+      this.eliminate(o, by);
+    }
     hitShip(s, by, kind) {
       if (s.mode === 'd' || s.invuln > 0) return false;
       if (s.shield) { s.shield = 0; s.invuln = 24; this.ev({ e: 'shieldPop', id: s.id, x: r1(s.x), y: r1(s.y) }); return true; }
@@ -884,9 +895,12 @@
     }
 
     // ---- contacts between ships (ramming pilots, jouster blades, bumping)
+    // Live blades as [x, y, bit]. bit 1 = right side, bit 2 = left side.
     bladePoints(s) {
-      const px = -Math.sin(s.a), py = Math.cos(s.a);
-      return [[s.x + px * 25, s.y + py * 25], [s.x - px * 25, s.y - py * 25]];
+      const px = -Math.sin(s.a), py = Math.cos(s.a), out = [];
+      if (s.joust & 1) out.push([s.x + px * C.BLADE_OFF, s.y + py * C.BLADE_OFF, 1]);
+      if (s.joust & 2) out.push([s.x - px * C.BLADE_OFF, s.y - py * C.BLADE_OFF, 2]);
+      return out;
     }
     shipContacts() {
       const ss = this.ships;
@@ -896,11 +910,20 @@
         if (a.joust > 0 && a.mode === 's') {
           for (const bp of this.bladePoints(a)) {
             for (const o of ss) {
-              if (o === a || o.mode === 'd') continue;
+              if (o === a || o.mode === 'd' || o.invuln > 0) continue;
               const r = o.mode === 'p' ? C.PILOT_R : C.SHIP_R;
-              if (Math.hypot(o.x - bp[0], o.y - bp[1]) < r + 9 && this.hitShip(o, a.id, 'blade')) this.ev({ e: 'clang', x: r1(bp[0]), y: r1(bp[1]) });
+              if (Math.hypot(o.x - bp[0], o.y - bp[1]) >= r + C.BLADE_R) continue;
+              this.ev({ e: 'clang', x: r1(bp[0]), y: r1(bp[1]) });
+              if (o.mode === 's' && o.joust > 0 && this.bladePoints(o).some(q => Math.hypot(q[0] - bp[0], q[1] - bp[1]) < C.BLADE_R * 2.2)) {
+                const ang = Math.atan2(o.y - a.y, o.x - a.x);
+                o.vx = Math.cos(ang) * 5; o.vy = Math.sin(ang) * 5; a.vx = -Math.cos(ang) * 5; a.vy = -Math.sin(ang) * 5;
+                continue;
+              }
+              if (o.mode === 's') { o.shield = 0; this.destroyShip(o, a.id); } else this.eliminate(o, a.id);
             }
+            for (const c of this.crates) if (!c.dead && Math.hypot(c.x - bp[0], c.y - bp[1]) < C.CRATE_R + C.BLADE_R) this.breakCrate(c);
           }
+          this.crates = this.crates.filter(c => !c.dead);
         }
         for (let j = i + 1; j < ss.length; j++) {
           const b = ss[j]; if (b.mode === 'd' || a.mode === 'd') continue;
@@ -1033,24 +1056,26 @@
         const r = s.mode === 'p' ? C.PILOT_HIT : C.SHIP_HIT;
         // Jouster blades swat bullets away
         if (s.joust > 0 && s.mode === 's') {
-          let blocked = false;
-          for (const bp of this.bladePoints(s)) if (Math.hypot(bp[0] - b.x, bp[1] - b.y) < 12) blocked = true;
-          if (blocked && !(s.id === b.owner && b.hops === 0)) {
+          const hit = this.bladePoints(s).find(bp => Math.hypot(bp[0] - b.x, bp[1] - b.y) < C.BLADE_R + C.BULLET_R);
+          if (hit) {
             if (b.k === 'm') this.explodeMissile(b); else b.dead = true;
-            this.ev({ e: 'clang', x: r1(b.x), y: r1(b.y) }); return;
+            s.joust &= ~hit[2];
+            this.ev({ e: 'bladeBreak', id: s.id, x: r1(hit[0]), y: r1(hit[1]) });
+            return;
           }
         }
         if (Math.hypot(s.x - b.x, s.y - b.y) >= r) continue;
         if (b.k === 'm') { this.explodeMissile(b); return; }
         b.dead = true;
+        this.ev({ e: 'hit', id: s.id, x: r1(b.x), y: r1(b.y), a: r3(Math.atan2(b.vy, b.vx)), c: b.c });
         this.hitShip(s, b.owner, b.k === 'i' ? 'ice' : 'bullet');
         return;
       }
     }
-    explodeMissile(b) { if (b.dead) return; b.dead = true; this.explode(b.x, b.y, C.MISSILE_BLAST, b.owner); }
+    explodeMissile(b) { if (b.dead) return; b.dead = true; this.explode(b.x, b.y, C.MISSILE_BLAST, b.owner, 'missile'); }
 
-    explode(x, y, r, by) {
-      this.ev({ e: 'boom', x: r1(x), y: r1(y), r });
+    explode(x, y, r, by, src) {
+      this.ev({ e: 'boom', x: r1(x), y: r1(y), r, s: src || 'missile' });
       const m = this.map;
       for (const s of this.ships) {
         if (s.mode === 'd') continue;
@@ -1083,7 +1108,7 @@
       }
       this.mines = this.mines.filter(m => !m.dead);
     }
-    detonate(mn) { if (mn.dead) return; mn.dead = true; this.explode(mn.x, mn.y, C.MINE_BLAST, mn.owner); }
+    detonate(mn) { if (mn.dead) return; mn.dead = true; this.explode(mn.x, mn.y, C.MINE_BLAST, mn.owner, 'mine'); }
 
     // ---- destructibles & pickups
     breakBlock(i) {
@@ -1104,7 +1129,6 @@
     givePower(s, t, x, y) {
       const P = POWERS[t];
       if (t === 'shield') s.shield = 1;
-      else if (t === 'joust') s.joust = C.JOUST;
       else if (t === 'reverse') {
         for (const o of this.ships) if (o !== s && o.mode !== 'd') { o.rev = C.REVERSE; o.a = wrapA(o.a + PI); o.vx *= -0.7; o.vy *= -0.7; }
         this.ev({ e: 'reverse', id: s.id });
@@ -1162,7 +1186,7 @@
         if (--it.life <= 0) { it.dead = true; continue; }
         if (it.wait > 0) { it.wait--; continue; }
         for (const s of this.ships) {
-          if (s.mode !== 's' || Math.hypot(s.x - it.x, s.y - it.y) > 36) continue;
+          if (s.mode !== 's' || Math.hypot(s.x - it.x, s.y - it.y) > 40) continue;
           it.dead = true;
           this.givePower(s, it.t, it.x, it.y);
           break;
@@ -1174,7 +1198,7 @@
       for (const c of this.crates) for (const s of this.ships) {
         if (c.dead || c.fixed || s.mode === 'd') continue;
         const dx = c.x - s.x, dy = c.y - s.y, d = Math.hypot(dx, dy) || 1, min = (s.mode === 's' ? C.SHIP_R : C.PILOT_R) + C.CRATE_R;
-        if (d < min) { c.x = s.x + dx / d * min; c.y = s.y + dy / d * min; c.vx = dx / d * C.CRATE_SPEED; c.vy = dy / d * C.CRATE_SPEED; }
+        if (d < min + 2) { c.vx = dx / d * C.CRATE_SPEED; c.vy = dy / d * C.CRATE_SPEED; }
       }
       this.crates = this.crates.filter(c => !c.dead);
       if (!live || this.sudden) return;

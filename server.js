@@ -223,7 +223,7 @@ function loop() {
     for (const r of rooms.values()) r.tick(wall);
   }
   if (n === 6) acc = 0;
-  setTimeout(loop, 2);
+  setTimeout(loop, Math.max(1, Math.floor(SP.TICK_MS - acc)));
 }
 loop();
 
